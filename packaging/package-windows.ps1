@@ -37,9 +37,17 @@ Copy-Item setup-windows.cmd, run-campus-bus.cmd, reset-demo.cmd $dist
 Copy-Item scripts\campus-bus.ps1 "$dist\scripts\"
 Copy-Item packaging\README-WINDOWS.txt $dist
 if (Get-ChildItem $dist -Recurse -Include db.properties, *.cnf, demo-accounts.txt) { Write-Host 'A settings file ended up in the release. Stopping.'; exit 1 }
-# standard zip (forward slashes, top folder included) that Windows "Extract All" and other tools unpack correctly
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-Remove-Item "target\dist\$name.zip" -ErrorAction SilentlyContinue
-[System.IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path $dist).Path, (Join-Path (Resolve-Path 'target\dist').Path "$name.zip"), 'Optimal', $true)
+# standard zip: forward-slash entry names (Windows PowerShell 5 would write backslashes), top folder included
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+$zipPath = Join-Path (Resolve-Path 'target\dist').Path "$name.zip"
+Remove-Item $zipPath -ErrorAction SilentlyContinue
+$base = (Resolve-Path 'target\dist').Path
+$zip = [System.IO.Compression.ZipFile]::Open($zipPath, 'Create')
+try {
+    foreach ($f in Get-ChildItem $dist -Recurse -File) {
+        $entry = $f.FullName.Substring($base.Length + 1) -replace '\\', '/'
+        [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $f.FullName, $entry, 'Optimal')
+    }
+} finally { $zip.Dispose() }
 $size = [int]((Get-Item "target\dist\$name.zip").Length / 1MB)
 Write-Host "Release: target\dist\$name.zip ($size MB)"
