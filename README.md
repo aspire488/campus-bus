@@ -33,14 +33,23 @@ Taken from the running app with synthetic test accounts (no real student data).
 
 1. Copy `db.properties.example` to `db.properties` and fill in your MySQL user and password.
    `db.properties` is git-ignored, so the password never enters the repository. Every value can also come from an environment variable (`CAMPUS_BUS_DB_PASSWORD`, …) or a `-D` option (`-Ddb.password=…`).
-2. From the project folder, on Windows double-click **`run-campus-bus.cmd`** (or run it in a terminal). It checks Java, Maven and `db.properties`, then starts the app and explains any problem. Any system:
+2. Start the app. On Windows the easiest way is to double-click **`run-campus-bus.cmd`** in the project folder: it checks Java, Maven and `db.properties`, then opens the window and explains any problem. The terminal waits while the app is open and returns when you close it.
+
+PowerShell (the default Windows terminal):
+
+```powershell
+Set-Location D:\campus-bus
+.\run-campus-bus.cmd
+```
+
+Command Prompt (`cmd.exe`):
 
 ```bat
 cd /d D:\campus-bus
-mvn clean compile exec:java
+run-campus-bus.cmd
 ```
 
-Later launches: `mvn exec:java`. (Use your own project folder in place of `D:\campus-bus`.)
+Any system, with Maven directly: `mvn clean compile exec:java` from the project folder (later launches: `mvn exec:java`). Use your own project folder in place of `D:\campus-bus`.
 
 On the very first launch the app creates an **empty** database from `database/schema.sql`, then opens **Set up your institution**: the institution's name and its first administrator (password typed twice). This screen appears once; after that the app opens at the login screen. More administrators are added inside the admin console, never through a public form. The admin then sets the timetable and imports the bus schedule (Admin → Routes → *Import schedule*, e.g. `database/scms-schedule-2025-08-18.txt`); students create their own accounts.
 
