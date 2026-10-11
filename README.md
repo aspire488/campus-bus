@@ -65,7 +65,7 @@ Other ways to run: open the folder as a Maven project in IntelliJ / Eclipse / VS
 | More administrators | Admin → *Admins* → *Add admin* (only a signed-in admin; the admin sign-in side says so) |
 | Students | *Create a student account* on the Student side of the login screen (password typed twice) |
 
-Student sign-in, admin sign-in, student sign-up and admin creation are four separate paths. Every new password needs 8-64 characters with an upper-case letter, a lower-case letter, a digit and a symbol; common words (password, admin, qwerty …) and sequences such as `1234` are refused (`User.checkNewPassword`). Existing accounts keep working.
+Student sign-in, admin sign-in, student sign-up and admin creation are four separate paths. Passwords are kept simple on purpose: 4-64 characters, no other rules (`User.checkNewPassword`). They are still stored only as salted PBKDF2 hashes.
 | Demo data only (`-Ddemo=true`) | `student@college.com` / `student123`; `ananya@college.com`, `student1@college.com` … `student140@college.com` / `pass123` |
 
 No real password is written in this repository. Local demo/test credentials live outside the project folder.

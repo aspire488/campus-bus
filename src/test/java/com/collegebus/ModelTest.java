@@ -57,7 +57,7 @@ class ModelTest {
         assertThrows(IllegalArgumentException.class, () -> student("CBR24CS099", "Riya Paul", email, "Secret#91x", "9000000000"));
     }
 
-    @ParameterizedTest @ValueSource(strings = {"", "     ", "      ", "abc12", "\t\t\t\t\t\t"})
+    @ParameterizedTest @ValueSource(strings = {"", "     ", "      ", "abc", "\t\t\t\t\t\t"})
     void weakPasswordsRejected(String pw) {
         assertThrows(IllegalArgumentException.class, () -> student("CBR24CS099", "Riya Paul", "a@college.com", pw, "9000000000"));
     }
@@ -309,20 +309,19 @@ class ModelTest {
         assertThrows(IllegalArgumentException.class, () -> Admin.create("ab", "Mary Jacob", "Long#pass91"));
         assertThrows(IllegalArgumentException.class, () -> Admin.create("bad name", "Mary Jacob", "Long#pass91"));
         assertThrows(IllegalArgumentException.class, () -> Admin.create("office", "<b>x</b>", "Long#pass91"));
-        assertThrows(IllegalArgumentException.class, () -> Admin.create("office", "Mary Jacob", "short"));
+        assertThrows(IllegalArgumentException.class, () -> Admin.create("office", "Mary Jacob", "abc"));
         assertThrows(IllegalArgumentException.class, () -> Admin.create("office", "Mary Jacob", "        "));
     }
 
-    @ParameterizedTest @ValueSource(strings = {"123", "abcdefgh", "ABCDEFG1!", "abcdefg1!", "Abcdefgh!", "Abcdefg12", "Password#1", "Admin#2026",
-            "Aa1!Aa1!Aa1!", "Kochi#1234", "        ", "Aa1!xyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzx"})
-    void weakPasswordsAreRejected(String pw) {
+    @ParameterizedTest @ValueSource(strings = {"", "123", "    ", "Aa1!xyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzx"})
+    void tooShortOrLongPasswordsAreRejected(String pw) {
         assertThrows(IllegalArgumentException.class, () -> User.checkNewPassword(pw));
         assertThrows(IllegalArgumentException.class, () -> student("SCS/10001/26", "Riya Paul", "r@college.com", pw, "9000000000"));
         assertThrows(IllegalArgumentException.class, () -> Admin.create("office", "Mary Jacob", pw));
     }
 
-    @Test void strongPasswordsAreAccepted() {
-        for (String pw : new String[]{"Secret#91x", "Kochi-Bus7", "My.Seat_42"}) assertDoesNotThrow(() -> User.checkNewPassword(pw));
+    @Test void simplePasswordsAreAccepted() {
+        for (String pw : new String[]{"1234", "riya", "pass123", "Secret#91x"}) assertDoesNotThrow(() -> User.checkNewPassword(pw));
     }
 
     @Test void admissionNumbersAsIssued() {

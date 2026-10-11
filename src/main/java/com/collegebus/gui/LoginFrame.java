@@ -123,7 +123,7 @@ public class LoginFrame extends JFrame {
         JTextField email = f.add("Email", new JTextField()), phone = f.add("Phone (10 digits)", new JTextField());
         JComboBox<String> dept = f.add("Class, e.g. S3 CS2", departments());
         f.skip();
-        JPasswordField pw = f.add("Password (8+: A-Z, a-z, 0-9 and a symbol)", new JPasswordField()), again = f.add("Repeat password", new JPasswordField());
+        JPasswordField pw = f.password(), again = f.add("Repeat password", new JPasswordField());
         boolean ok = f.open("Create account", () -> {
             if (!new String(pw.getPassword()).equals(new String(again.getPassword()))) throw new IllegalArgumentException("The two passwords are different.");
             Student s = new Student();
@@ -167,7 +167,7 @@ public class LoginFrame extends JFrame {
         JTextField inst = f.add("Institution name", new JTextField(28)), name = f.add("Your full name", new JTextField());
         JTextField user = f.add("Admin username", new JTextField());
         f.skip();
-        JPasswordField pw = f.add("Password (8+: A-Z, a-z, 0-9 and a symbol)", new JPasswordField()), again = f.add("Repeat password", new JPasswordField());
+        JPasswordField pw = f.password(), again = f.add("Repeat password", new JPasswordField());
         boolean ok = f.open("Create administrator", () -> {
             String p = new String(pw.getPassword());
             if (!p.equals(new String(again.getPassword()))) throw new IllegalArgumentException("The two passwords are different.");

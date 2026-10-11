@@ -73,13 +73,13 @@ Checked at 1024×640 and 1320×816 on login, search, seat map (25-stop route, 49
 
 Build: `mvn clean compile`, `mvn clean test` (128/128), `mvn clean package` (jar) all BUILD SUCCESS. Launcher `run-campus-bus.cmd`: window opens; Java missing / Maven missing / `db.properties` missing each print a clear message and exit 1.
 
-Changes in this step: class typed into the drop-down is always saved (registration, profile, admin edit); new-password rule (8-64 characters, upper, lower, digit, symbol, no common words or `1234`) with 13 new tests; admin sign-in side states where admins are created.
+Changes in this step: class typed into the drop-down is always saved (registration, profile, admin edit); new-password rule (later simplified on request to 4-64 characters); admin sign-in side states where admins are created.
 
 Acceptance, synthetic students `TEST/10001/26`, `TEST/10002/26` (S3 CS2) and `TEST/10003/26` (S1 CS1) on `college_bus_test` only:
 
 | # | Case | Result | Evidence |
 |---|---|---|---|
-| 1 | Register 3; reject duplicate admission no. / email, blank name, bad email, bad phone, mismatch, bad admission no., weak passwords (`123`, `password`, `Abcdefgh1`, `Admin#2026`) | PASS | each message seen; rows and classes checked in MySQL |
+| 1 | Register 3; reject duplicate admission no. / email, blank name, bad email, bad phone, mismatch, bad admission no., too-short password (`123`) | PASS | each message seen; rows and classes checked in MySQL |
 | 2 | Valid login (lower-case admission no.), wrong password, unknown user, blank, logout; real keys: type, Tab, Enter | PASS | dashboard opened from real keystrokes |
 | 3 | Search Kaloor (8 trips), unknown stop and bus (0); printed / estimated / campus-target times | PASS | |
 | 4 | Book seat 5, shown in My reservations | PASS | |

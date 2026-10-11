@@ -52,6 +52,13 @@ public class FormDialog extends JDialog {
         return field;
     }
 
+    /** A plain "Password" field with the rule as a small hint underneath. */
+    public JPasswordField password() {
+        JPasswordField pw = add("Password", new JPasswordField());
+        ((JPanel) pw.getParent()).add(Theme.label("At least 4 characters", Theme.body(11), Theme.MUTED), BorderLayout.SOUTH);
+        return pw;
+    }
+
     /** Shows the dialog; returns true only when the save action finished without an error. */
     public boolean open(String saveText, SaveAction action) {
         JButton save = Theme.button(saveText, true), cancel = Theme.button("Cancel", false);

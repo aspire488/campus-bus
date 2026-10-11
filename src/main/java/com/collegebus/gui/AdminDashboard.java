@@ -315,7 +315,7 @@ public class AdminDashboard extends Dashboard {
     private void addAdmin() {
         FormDialog f = new FormDialog(this, "Add an administrator");
         JTextField name = f.add("Full name", new JTextField()), user = f.add("Username", new JTextField());
-        JPasswordField pw = f.add("Password (8+: A-Z, a-z, 0-9 and a symbol)", new JPasswordField()), again = f.add("Repeat password", new JPasswordField());
+        JPasswordField pw = f.password(), again = f.add("Repeat password", new JPasswordField());
         if (f.open("Add admin", () -> {
             String p = new String(pw.getPassword());
             if (!p.equals(new String(again.getPassword()))) throw new IllegalArgumentException("The two passwords are different.");

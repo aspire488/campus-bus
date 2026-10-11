@@ -57,15 +57,9 @@ public abstract class User implements Displayable {
     }
 
     /** Passwords are never stored as plain text: "pbkdf2$iterations$salt$hash" (PBKDF2-HMAC-SHA256, random 16-byte salt). */
-    /** Rule for every new password: 8-64 characters with upper case, lower case, a digit and a symbol, and not an easily guessed one. */
+    /** Rule for every new password: kept simple on purpose, 4-64 characters and not only spaces. */
     public static void checkNewPassword(String pw) {
-        if (pw.length() < 8 || pw.length() > 64) throw new IllegalArgumentException("Password needs 8-64 characters.");
-        if (!pw.matches(".*[A-Z].*") || !pw.matches(".*[a-z].*") || !pw.matches(".*\\d.*") || !pw.matches(".*[^A-Za-z0-9\\s].*"))
-            throw new IllegalArgumentException("Password needs an upper-case letter, a lower-case letter, a digit and a symbol (e.g. ! @ # -).");
-        String plain = pw.toLowerCase().replaceAll("[^a-z]", "");
-        if (pw.chars().distinct().count() < 5 || java.util.List.of("password", "qwerty", "admin", "welcome", "letmein", "abc", "iloveyou", "college", "student").stream().anyMatch(plain::startsWith)
-                || pw.contains("1234") || pw.contains("0000"))
-            throw new IllegalArgumentException("That password is too easy to guess. Avoid common words and sequences like 1234.");
+        if (pw.isBlank() || pw.length() < 4 || pw.length() > 64) throw new IllegalArgumentException("Password needs 4-64 characters.");
     }
 
     public static String hash(String plain) {
