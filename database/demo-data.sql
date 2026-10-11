@@ -6,16 +6,16 @@
 -- No admin is shipped: on first launch the app asks the institution to create its own administrator.
 
 INSERT INTO students (reg_no, name, email, password, department, phone) VALUES
-('CBR24CS001', 'Joel Mathew',      'student@college.com',  SHA2('student123', 256), 'S3 CS1', '9000000201'),
-('CBR24CS014', 'Ananya Menon',     'ananya@college.com',   SHA2('pass123', 256),    'S3 CS2', '9000000202'),
-('CBR24EC007', 'Rahul Nair',       'rahul@college.com',    SHA2('pass123', 256),    'S3 EC1', '9000000206'),
-('CBR24ME021', 'Fathima Rasheed',  'fathima@college.com',  SHA2('pass123', 256),    'S3 ME1', '9000000207'),
-('CBR24CE003', 'Arjun Krishnan',   'arjun@college.com',    SHA2('pass123', 256),    'S3 CE1', '9000000203'),
-('CBR24EE011', 'Sneha Thomas',     'sneha@college.com',    SHA2('pass123', 256),    'S3 CT1', '9000000204'),
-('CBR24CS027', 'Aditya Varma',     'aditya@college.com',   SHA2('pass123', 256),    'S5 CS1', '9000000208'),
-('CBR24EC019', 'Meera Joseph',     'meera@college.com',    SHA2('pass123', 256),    'S5 EC2', '9000000209'),
-('CBR24ME008', 'Nikhil George',    'nikhil@college.com',   SHA2('pass123', 256),    'S5 AU1', '9000000210'),
-('CBR24CS040', 'Diya Pillai',      'diya@college.com',     SHA2('pass123', 256),    'S1 CO1', '9000000205');
+('CBR24CS001', 'Joel Mathew',      'student@college.example.com',  SHA2('student123', 256), 'S3 CS1', '9000000201'),
+('CBR24CS014', 'Ananya Menon',     'ananya@college.example.com',   SHA2('pass123', 256),    'S3 CS2', '9000000202'),
+('CBR24EC007', 'Rahul Nair',       'rahul@college.example.com',    SHA2('pass123', 256),    'S3 EC1', '9000000206'),
+('CBR24ME021', 'Fathima Rasheed',  'fathima@college.example.com',  SHA2('pass123', 256),    'S3 ME1', '9000000207'),
+('CBR24CE003', 'Arjun Krishnan',   'arjun@college.example.com',    SHA2('pass123', 256),    'S3 CE1', '9000000203'),
+('CBR24EE011', 'Sneha Thomas',     'sneha@college.example.com',    SHA2('pass123', 256),    'S3 CT1', '9000000204'),
+('CBR24CS027', 'Aditya Varma',     'aditya@college.example.com',   SHA2('pass123', 256),    'S5 CS1', '9000000208'),
+('CBR24EC019', 'Meera Joseph',     'meera@college.example.com',    SHA2('pass123', 256),    'S5 EC2', '9000000209'),
+('CBR24ME008', 'Nikhil George',    'nikhil@college.example.com',   SHA2('pass123', 256),    'S5 AU1', '9000000210'),
+('CBR24CS040', 'Diya Pillai',      'diya@college.example.com',     SHA2('pass123', 256),    'S1 CO1', '9000000205');
 
 -- each route is stored once, from the first pick-up stop to the institution; buses also drive it in reverse
 INSERT INTO routes (source, destination, stops, distance_km) VALUES
@@ -70,7 +70,7 @@ SELECT CONCAT('CBR24G', LPAD(n, 3, '0')),
                   'Kwame', 'Amara', 'Arjun', 'Priya', 'Noah', 'Emma', 'Yusuf', 'Aisha', 'Kenji', 'Hana'), ' ',
               ELT(1 + (n DIV 20) % 20, 'Nair', 'Menon', 'Thomas', 'Joseph', 'Khan', 'Silva', 'Wang', 'Okafor', 'Garcia', 'Smith',
                   'Patel', 'Kumar', 'Rahman', 'George', 'Mathew', 'Ito', 'Rossi', 'Mensah', 'Varma', 'Pillai')),
-       CONCAT('student', n, '@college.com'), SHA2('pass123', 256),
+       CONCAT('student', n, '@college.example.com'), SHA2('pass123', 256),
        CONCAT('S', ELT(1 + n % 4, '1', '3', '5', '7'), ' ', ELT(1 + (n DIV 4) % 8, 'CS', 'CT', 'CO', 'EC', 'ME', 'CE', 'AU', 'VL'), 1 + n % 2),
        CONCAT('9', LPAD(n, 9, '0'))
 FROM seq;

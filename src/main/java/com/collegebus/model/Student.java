@@ -29,7 +29,7 @@ public class Student extends User {
         if (!reg.matches("[A-Z0-9][A-Z0-9/-]{5,19}") || !reg.matches(".*\\d.*"))
             throw new IllegalArgumentException("Admission number: 6-20 letters, digits, / or -, e.g. SCS/10001/26.");
         if (mail.length() > 100 || !mail.matches("[a-z0-9._%+-]+@[a-z0-9-]+(\\.[a-z0-9-]+)*\\.[a-z]{2,}"))
-            throw new IllegalArgumentException("Enter a valid email address, e.g. name@college.com.");
+            throw new IllegalArgumentException("Enter a valid email address, e.g. name@college.example.com.");
         checkNewPassword(password);
         validate(name, department, phone);              // everything is checked before anything is changed
         this.regNo = reg;

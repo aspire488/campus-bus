@@ -1,8 +1,9 @@
-# Copy this file to db.properties and fill in your MySQL details.
+# Copy this file to db.properties and fill in your MySQL details (on Windows, setup-windows.cmd writes it for you).
 # db.properties is git-ignored, so your password never ends up in the repository.
 # Every value can also be given as an environment variable (CAMPUS_BUS_DB_HOST, CAMPUS_BUS_DB_USER,
 # CAMPUS_BUS_DB_PASSWORD, CAMPUS_BUS_DB_NAME) or as a -D option (-Ddb.password=...).
+# Use a dedicated MySQL user: the app refuses to log in as root without a password.
 db.host=localhost:3306
 db.name=college_bus_db
-db.user=root
-db.password=
+db.user=your_mysql_user
+db.password=your_mysql_password

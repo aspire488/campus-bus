@@ -13,12 +13,13 @@ import java.util.Properties;
  * JDBC entry point: every DAO asks this class for a Connection.
  * Each setting (db.host, db.name, db.user, db.password) is read from, in order:
  * a -D system property, an environment variable (CAMPUS_BUS_DB_HOST ...), db.properties.
- * db.properties is looked for in the current folder, then in the project folder the app was started from.
+ * db.properties is looked for in the current folder, then in the project folder the app was started from,
+ * then in the user's settings folder (%APPDATA%\CampusBus on Windows, written by setup-windows.cmd).
  * Without any of these the app refuses to guess (no silent root@localhost). No password is written in the source code.
  */
 public final class DatabaseConnection {
     private static final Properties FILE = new Properties();
-    private static final List<Path> LOOKED_IN = candidates(Path.of("").toAbsolutePath(), codeHome());
+    private static final List<Path> LOOKED_IN = withUserSettings(candidates(Path.of("").toAbsolutePath(), codeHome()));
     private static boolean fileFound;
 
     static {
@@ -46,6 +47,18 @@ public final class DatabaseConnection {
         return list;
     }
 
+    /** Where setup-windows.cmd keeps this user's settings: %APPDATA%\CampusBus, or ~/.campus-bus elsewhere. */
+    public static Path userSettingsFolder() {
+        String appData = System.getenv("APPDATA");
+        return appData != null ? Path.of(appData, "CampusBus") : Path.of(System.getProperty("user.home"), ".campus-bus");
+    }
+
+    private static List<Path> withUserSettings(List<Path> list) {
+        Path user = userSettingsFolder().resolve("db.properties");
+        if (!list.contains(user)) list.add(user);
+        return list;
+    }
+
     private static Path codeHome() {
         try { return Path.of(DatabaseConnection.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toAbsolutePath(); }
         catch (Exception e) { return null; }
@@ -57,8 +70,15 @@ public final class DatabaseConnection {
     }
 
     static String missingSettings() {
-        return "No database settings: copy db.properties.example to db.properties in " + LOOKED_IN.get(LOOKED_IN.size() - 1).getParent()
-            + " and fill in your MySQL user and password.";
+        return "No database settings. On Windows run setup-windows.cmd once; or copy db.properties.example to db.properties in "
+            + LOOKED_IN.get(Math.max(0, LOOKED_IN.size() - 2)).getParent() + " and fill in your MySQL user and password.";
+    }
+
+    /** The app never logs in as MySQL root without a password, whatever the settings say. */
+    public static void checkLogin(String user, String password) throws SQLException {
+        if (user == null || user.isBlank()) throw new SQLException(missingSettings(), "08001");
+        if (user.equalsIgnoreCase("root") && password.isEmpty())
+            throw new SQLException("Refusing to log in as MySQL root without a password. Set db.user/db.password to a dedicated MySQL user.", "28000");
     }
 
     private DatabaseConnection() { }
@@ -72,13 +92,16 @@ public final class DatabaseConnection {
 
     private static Connection open(String database) throws SQLException {
         if (!configured()) throw new SQLException(missingSettings(), "08001");
+        String user = setting("db.user", null), password = setting("db.password", "");
+        checkLogin(user, password);
         String url = "jdbc:mysql://" + setting("db.host", "localhost:3306") + "/" + database + "?connectTimeout=3000";
-        return DriverManager.getConnection(url, setting("db.user", "root"), setting("db.password", ""));
+        return DriverManager.getConnection(url, user, password);
     }
 
     /** A message a normal user can act on: server down vs. wrong user/password/permissions (no stack trace, no password). */
     public static String explain(Throwable e) {
         if (!configured()) return missingSettings();
+        if (e instanceof SQLException s && s.getMessage() != null && s.getMessage().startsWith("Refusing")) return s.getMessage();
         String state = e instanceof SQLException s && s.getSQLState() != null ? s.getSQLState() : "";
         if (state.startsWith("28") || state.equals("42000"))
             return "MySQL refused access. Check db.user, db.password and db.name in db.properties.";

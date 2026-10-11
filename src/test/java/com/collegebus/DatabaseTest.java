@@ -43,8 +43,8 @@ class DatabaseTest {
     }
 
     private Student login(String who, String pw) throws SQLException { return (Student) sys.login(false, who, pw); }
-    private Student joel() throws SQLException { return login("student@college.com", "student123"); }
-    private Student ananya() throws SQLException { return login("ananya@college.com", "pass123"); }
+    private Student joel() throws SQLException { return login("student@college.example.com", "student123"); }
+    private Student ananya() throws SQLException { return login("ananya@college.example.com", "pass123"); }
     private Bus bus(String no) throws SQLException { return sys.searchBus("", "", TOMORROW, LocalTime.MIN, no).get(0); }
 
     private static int count(String sql, Object... p) throws SQLException {
@@ -62,31 +62,31 @@ class DatabaseTest {
     // ---------------- Login ----------------
 
     @Test void loginByEmailOrRegisterNumberIsCaseInsensitive() throws SQLException {
-        assertInstanceOf(Student.class, sys.login(false, "student@college.com", "student123"));
-        assertInstanceOf(Student.class, sys.login(false, "  STUDENT@College.com ", "student123"));
+        assertInstanceOf(Student.class, sys.login(false, "student@college.example.com", "student123"));
+        assertInstanceOf(Student.class, sys.login(false, "  STUDENT@College.example.com ", "student123"));
         assertInstanceOf(Student.class, sys.login(false, "cbr24cs001", "student123"));
         assertInstanceOf(Admin.class, sys.login(true, "admin", "Office#2026"));
     }
 
     @Test void oldSha256PasswordsAreUpgradedAtSignIn() throws SQLException {
-        assertEquals(64, count("SELECT LENGTH(password) FROM students WHERE email='student@college.com'"));   // seeded with SHA2()
-        assertThrows(IllegalArgumentException.class, () -> sys.login(false, "student@college.com", "wrong"));
-        assertEquals(64, count("SELECT LENGTH(password) FROM students WHERE email='student@college.com'"));   // a failed sign-in changes nothing
+        assertEquals(64, count("SELECT LENGTH(password) FROM students WHERE email='student@college.example.com'"));   // seeded with SHA2()
+        assertThrows(IllegalArgumentException.class, () -> sys.login(false, "student@college.example.com", "wrong"));
+        assertEquals(64, count("SELECT LENGTH(password) FROM students WHERE email='student@college.example.com'"));   // a failed sign-in changes nothing
         joel();
-        assertEquals(1, count("SELECT COUNT(*) FROM students WHERE email='student@college.com' AND password LIKE 'pbkdf2$%'"));
+        assertEquals(1, count("SELECT COUNT(*) FROM students WHERE email='student@college.example.com' AND password LIKE 'pbkdf2$%'"));
         assertFalse(joel().needsRehash());                                            // and the new hash works
-        assertThrows(IllegalArgumentException.class, () -> sys.login(false, "student@college.com", "STUDENT123"));
+        assertThrows(IllegalArgumentException.class, () -> sys.login(false, "student@college.example.com", "STUDENT123"));
         assertEquals(1, count("SELECT COUNT(*) FROM admins WHERE password LIKE 'pbkdf2$%'"));                  // setup stores PBKDF2
     }
 
     @Test void badLoginsRefusedWithClearMessages() {
-        String[][] bad = {{"student@college.com", "wrong"}, {"nobody@college.com", "student123"}, {"", "student123"},
-            {"student@college.com", ""}, {"", ""}, {"   ", "   "}, {"' OR '1'='1", "' OR '1'='1"}};
+        String[][] bad = {{"student@college.example.com", "wrong"}, {"nobody@college.example.com", "student123"}, {"", "student123"},
+            {"student@college.example.com", ""}, {"", ""}, {"   ", "   "}, {"' OR '1'='1", "' OR '1'='1"}};
         for (String[] b : bad)
             assertThrows(IllegalArgumentException.class, () -> sys.login(false, b[0], b[1]), b[0] + "/" + b[1]);
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> sys.login(false, "  ", "x"));
         assertTrue(e.getMessage().startsWith("Enter"), e.getMessage());
-        assertThrows(IllegalArgumentException.class, () -> sys.login(true, "student@college.com", "student123"));   // student is not an admin
+        assertThrows(IllegalArgumentException.class, () -> sys.login(true, "student@college.example.com", "student123"));   // student is not an admin
         assertThrows(IllegalArgumentException.class, () -> sys.login(true, "admin", "OFFICE#2026"));                    // passwords are case-sensitive
     }
 
@@ -94,15 +94,15 @@ class DatabaseTest {
 
     @Test void registrationAndDuplicates() throws Exception {
         Student s = new Student();
-        s.registerStudent("CBR24CS099", "Riya Paul", "riya@college.com", "Secret#91x", "Civil", "9000000000");
+        s.registerStudent("CBR24CS099", "Riya Paul", "riya@college.example.com", "Secret#91x", "Civil", "9000000000");
         sys.registerStudent(s);
-        assertEquals("CBR24CS099", login("riya@college.com", "Secret#91x").getRegNo());
+        assertEquals("CBR24CS099", login("riya@college.example.com", "Secret#91x").getRegNo());
 
         Student sameEmail = new Student();
-        sameEmail.registerStudent("CBR24CS100", "Riya Two", "RIYA@college.com", "Secret#91x", "Civil", "9000000001");
+        sameEmail.registerStudent("CBR24CS100", "Riya Two", "RIYA@college.example.com", "Secret#91x", "Civil", "9000000001");
         assertThrows(IllegalArgumentException.class, () -> sys.registerStudent(sameEmail));
         Student sameReg = new Student();
-        sameReg.registerStudent("cbr24cs099", "Riya Three", "riya3@college.com", "Secret#91x", "Civil", "9000000002");
+        sameReg.registerStudent("cbr24cs099", "Riya Three", "riya3@college.example.com", "Secret#91x", "Civil", "9000000002");
         assertThrows(IllegalArgumentException.class, () -> sys.registerStudent(sameReg));
         assertEquals(151, count("SELECT COUNT(*) FROM students"));                // 150 demo students + 1
     }
@@ -143,7 +143,7 @@ class DatabaseTest {
     // ---------------- Reservation integrity ----------------
 
     @Test void seatTwelveCanOnlyBeHeldByOneStudentAtATime() throws SQLException {
-        Student a = joel(), b = login("arjun@college.com", "pass123");
+        Student a = joel(), b = login("arjun@college.example.com", "pass123");
         int busId = bus("CB-01").getBusId();
         Reservation ra = rs.bookSeat(a, busId, TOMORROW, 12);
         IllegalStateException clash = assertThrows(IllegalStateException.class, () -> rs.bookSeat(b, busId, TOMORROW, 12));
@@ -265,9 +265,9 @@ class DatabaseTest {
 
     @Test void removedStudentGetsAMeaningfulError() throws Exception {
         Student s = new Student();
-        s.registerStudent("CBR24CS099", "Riya Paul", "riya@college.com", "Secret#91x", "Civil", "9000000000");
+        s.registerStudent("CBR24CS099", "Riya Paul", "riya@college.example.com", "Secret#91x", "Civil", "9000000000");
         sys.registerStudent(s);
-        Student riya = login("riya@college.com", "Secret#91x");
+        Student riya = login("riya@college.example.com", "Secret#91x");
         sys.students().delete(riya.getId());
         Exception e = assertThrows(IllegalStateException.class, () -> rs.bookSeat(riya, bus("CB-01").getBusId(), TOMORROW, 12));
         assertFalse(e.getMessage().contains("taken"), e.getMessage());
@@ -610,6 +610,13 @@ class DatabaseTest {
         assertEquals("S1 CS1", ((Student) sys.login(false, " scs/10001/26 ", "Secret#912x")).getDepartment());   // as typed, any case
         Reservation r = rs.bookSeat((Student) sys.login(false, "SCS/10001/26", "Secret#912x"), bus("CB-02").getBusId(), TOMORROW, "OUT", 40, "Aluva");
         assertEquals("CS", Student.departmentOf(rs.find(null, r.getResId()).getStudentClass()));      // the admin's department filter
+    }
+
+    @Test void demoSetupRefusesAnyOtherDatabase() throws Exception {
+        int students = count("SELECT COUNT(*) FROM students");
+        assertThrows(IllegalStateException.class, com.collegebus.service.DemoSetup::run);       // settings point to college_bus_test
+        assertEquals(students, count("SELECT COUNT(*) FROM students"));
+        assertFalse(sys.needsSetup());
     }
 
     @Test void overviewNumbersMatchTheDatabase() throws SQLException {

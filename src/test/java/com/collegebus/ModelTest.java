@@ -32,49 +32,49 @@ class ModelTest {
     // ---------------- Student registration ----------------
 
     @Test void validStudentIsNormalised() {
-        Student s = student(" cbr24cs099 ", "  Riya  Paul ", " Riya.Paul@College.COM ", "Secret#91x", "9000000000");
+        Student s = student(" cbr24cs099 ", "  Riya  Paul ", " Riya.Paul@College.Example.COM ", "Secret#91x", "9000000000");
         assertEquals("CBR24CS099", s.getRegNo());
-        assertEquals("riya.paul@college.com", s.getEmail());
+        assertEquals("riya.paul@college.example.com", s.getEmail());
         assertEquals("Riya  Paul".trim(), s.getName());
         assertTrue(s.checkPassword("Secret#91x"));
         assertFalse(s.checkPassword("Secret#92x"));
     }
 
     @Test void namesWithApostropheDotAndHyphenAreAllowed() {
-        assertEquals("D'Souza-Nair K.", student("CBR24CS099", "D'Souza-Nair K.", "d@college.com", "Secret#91x", "9000000000").getName());
+        assertEquals("D'Souza-Nair K.", student("CBR24CS099", "D'Souza-Nair K.", "d@college.example.com", "Secret#91x", "9000000000").getName());
     }
 
     @ParameterizedTest @ValueSource(strings = {"", "   ", "Al", "R2D2 Robot", "<html><b>x</b>", "Name;DROP TABLE"})
     void badNamesRejected(String name) {
-        assertThrows(IllegalArgumentException.class, () -> student("CBR24CS099", name, "a@college.com", "Secret#91x", "9000000000"));
+        assertThrows(IllegalArgumentException.class, () -> student("CBR24CS099", name, "a@college.example.com", "Secret#91x", "9000000000"));
     }
 
     @Test void overlongNameRejected() {
-        assertThrows(IllegalArgumentException.class, () -> student("CBR24CS099", "A".repeat(81), "a@college.com", "Secret#91x", "9000000000"));
+        assertThrows(IllegalArgumentException.class, () -> student("CBR24CS099", "A".repeat(81), "a@college.example.com", "Secret#91x", "9000000000"));
     }
 
-    @ParameterizedTest @ValueSource(strings = {"", "   ", "plain", "a@b", "a@@college.com", "a b@college.com", "@college.com"})
+    @ParameterizedTest @ValueSource(strings = {"", "   ", "plain", "a@b", "a@@college.example.com", "a b@college.example.com", "@college.example.com"})
     void badEmailsRejected(String email) {
         assertThrows(IllegalArgumentException.class, () -> student("CBR24CS099", "Riya Paul", email, "Secret#91x", "9000000000"));
     }
 
     @ParameterizedTest @ValueSource(strings = {"", "     ", "      ", "abc", "\t\t\t\t\t\t"})
     void weakPasswordsRejected(String pw) {
-        assertThrows(IllegalArgumentException.class, () -> student("CBR24CS099", "Riya Paul", "a@college.com", pw, "9000000000"));
+        assertThrows(IllegalArgumentException.class, () -> student("CBR24CS099", "Riya Paul", "a@college.example.com", pw, "9000000000"));
     }
 
     @ParameterizedTest @ValueSource(strings = {"", "12345", "CBR 24CS1", "/SCS/10001", "SCS/ABC/XY", "ABCDEFGHIJKLMNOPQRSTU", "SCS/10001/26/12345678"})   // 21 characters
     void badRegisterNumbersRejected(String reg) {
-        assertThrows(IllegalArgumentException.class, () -> student(reg, "Riya Paul", "a@college.com", "Secret#91x", "9000000000"));
+        assertThrows(IllegalArgumentException.class, () -> student(reg, "Riya Paul", "a@college.example.com", "Secret#91x", "9000000000"));
     }
 
     @ParameterizedTest @ValueSource(strings = {"", "123", "90000000001", "98470abcde", "          "})
     void badPhonesRejected(String phone) {
-        assertThrows(IllegalArgumentException.class, () -> student("CBR24CS099", "Riya Paul", "a@college.com", "Secret#91x", phone));
+        assertThrows(IllegalArgumentException.class, () -> student("CBR24CS099", "Riya Paul", "a@college.example.com", "Secret#91x", phone));
     }
 
     @Test void blankDepartmentRejected() {
-        assertThrows(IllegalArgumentException.class, () -> new Student().registerStudent("CBR24CS099", "Riya Paul", "a@college.com", "Secret#91x", " ", "9000000000"));
+        assertThrows(IllegalArgumentException.class, () -> new Student().registerStudent("CBR24CS099", "Riya Paul", "a@college.example.com", "Secret#91x", " ", "9000000000"));
     }
 
     // ---------------- Bus ----------------
@@ -317,12 +317,29 @@ class ModelTest {
     @ParameterizedTest @ValueSource(strings = {"", "123", "    ", "Aa1!xyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzx"})
     void tooShortOrLongPasswordsAreRejected(String pw) {
         assertThrows(IllegalArgumentException.class, () -> User.checkNewPassword(pw));
-        assertThrows(IllegalArgumentException.class, () -> student("SCS/10001/26", "Riya Paul", "r@college.com", pw, "9000000000"));
+        assertThrows(IllegalArgumentException.class, () -> student("SCS/10001/26", "Riya Paul", "r@college.example.com", pw, "9000000000"));
         assertThrows(IllegalArgumentException.class, () -> Admin.create("office", "Mary Jacob", pw));
     }
 
     @Test void simplePasswordsAreAccepted() {
         for (String pw : new String[]{"1234", "riya", "pass123", "Secret#91x"}) assertDoesNotThrow(() -> User.checkNewPassword(pw));
+    }
+
+    @Test void neverRootWithoutPassword() {
+        assertThrows(java.sql.SQLException.class, () -> DatabaseConnection.checkLogin("root", ""));
+        assertThrows(java.sql.SQLException.class, () -> DatabaseConnection.checkLogin("ROOT", ""));
+        assertThrows(java.sql.SQLException.class, () -> DatabaseConnection.checkLogin(null, "x"));
+        assertDoesNotThrow(() -> DatabaseConnection.checkLogin("campus_bus", "secret"));
+    }
+
+    @Test void demoSetupOnlyTouchesTheDemoDatabase() {
+        assertTrue(com.collegebus.service.DemoSetup.isDemoDatabase("campus_bus_demo"));
+        assertFalse(com.collegebus.service.DemoSetup.isDemoDatabase("college_bus_db"));
+        assertFalse(com.collegebus.service.DemoSetup.isDemoDatabase("college_bus_test"));
+        String a = com.collegebus.service.DemoSetup.newPassword(), b = com.collegebus.service.DemoSetup.newPassword();
+        assertTrue(a.matches("[a-z]+-\\d{4}-[a-z]{2}"), a);
+        assertNotEquals(a, b);
+        assertDoesNotThrow(() -> User.checkNewPassword(a));
     }
 
     @Test void settingsAreFoundFromAnyFolder() {
@@ -335,14 +352,14 @@ class ModelTest {
     }
 
     @Test void admissionNumbersAsIssued() {
-        Student s = student(" scs/10001/26 ", "Riya Paul", "riya@college.com", "Secret#91x", "9000000000");
+        Student s = student(" scs/10001/26 ", "Riya Paul", "riya@college.example.com", "Secret#91x", "9000000000");
         assertEquals("SCS/10001/26", s.getRegNo());
-        assertEquals("CBR24-CS01", student("CBR24-CS01", "Riya Paul", "r2@college.com", "Secret#91x", "9000000000").getRegNo());
+        assertEquals("CBR24-CS01", student("CBR24-CS01", "Riya Paul", "r2@college.example.com", "Secret#91x", "9000000000").getRegNo());
     }
 
     @Test void semestersAreOneToEight() {
         Student s = new Student();
-        s.registerStudent("SCS/10001/26", "Asha Nair", "asha@college.com", "Secret#91x", "S8 EC2", "9000000000");
+        s.registerStudent("SCS/10001/26", "Asha Nair", "asha@college.example.com", "Secret#91x", "S8 EC2", "9000000000");
         assertEquals("EC", s.getDepartmentCode());
         assertThrows(IllegalArgumentException.class, () -> s.updateStudent("Asha Nair", "S9 CS1", "9000000000"));
         assertThrows(IllegalArgumentException.class, () -> s.updateStudent("Asha Nair", "S0 CS1", "9000000000"));

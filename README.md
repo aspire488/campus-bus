@@ -29,6 +29,26 @@ Taken from the running app with synthetic test accounts (no real student data).
 
 ## 1. Quick start
 
+### Windows 10 / 11: the packaged release (no Java, no Maven)
+
+1. Download `CAMPUS-BUS-1.0-windows-x64.zip` from the repository's **Releases** page and unzip it anywhere (spaces in the path are fine).
+2. Double-click **`setup-windows.cmd`** once (needs internet, about 2-5 minutes). It
+   - downloads MySQL 8.4.11 from mysql.com (280 MB) and checks its SHA-256,
+   - sets up a private MySQL for this Windows user: no admin rights, port 3310, reachable only from this computer,
+     files in `%LOCALAPPDATA%\CampusBus`,
+   - creates the demo database `campus_bus_demo` with fictional data and an administrator, and gives every account
+     a fresh random password,
+   - writes `db.properties` and `demo-accounts.txt` to `%APPDATA%\CampusBus` (readable only by this Windows user) and opens the accounts file.
+   Running it again changes nothing. It never touches any other database and never prints a password.
+3. Double-click **`run-campus-bus.cmd`** every time: it starts that MySQL, opens the app, and stops MySQL when the app closes.
+4. **`reset-demo.cmd`** deletes only the demo database (you must type `DELETE`) and sets it up again with new passwords.
+
+The release contains its own Java runtime and starts the app with that runtime's signed `javaw.exe` (an unsigned launcher `.exe` would be blocked by Windows Smart App Control). Requirements: Windows 10 or 11, 64-bit, about 1 GB free disk, 4 GB RAM, the Microsoft Visual C++ runtime (setup checks it and links the installer). Developers build the release with `package-windows.cmd` (JDK 21+ with jlink, Maven).
+
+The same `setup-windows.cmd` / `run-campus-bus.cmd` also work in a source checkout (then Java 17+ and Maven are needed).
+
+### From source (any OS)
+
 **You need:** JDK 17+, Apache Maven 3.8+, MySQL 8 (server running). Windows, macOS or Linux, with a desktop (the app is a window, not a website).
 
 **On a new computer, step by step:**
@@ -75,7 +95,7 @@ Any system, with Maven directly: `mvn clean compile exec:java` from the project 
 
 On the very first launch the app creates an **empty** database from `database/schema.sql`, then opens **Set up your institution**: the institution's name and its first administrator (password typed twice). This screen appears once; after that the app opens at the login screen. More administrators are added inside the admin console, never through a public form. The admin then sets the timetable and imports the bus schedule (Admin → Routes → *Import schedule*, e.g. `database/scms-schedule-2025-08-18.txt`); students create their own accounts.
 
-For a classroom demo with sample data instead, start on a new empty database with `mvn clean compile exec:java -Ddemo=true`: this also loads `database/demo-data.sql` (5 sample routes, 13 buses, 150 students, about 780 reservations). Its passwords are public, so never load it into a real institution's database.
+For a classroom demo, use `setup-windows.cmd` (above): it loads the fictional `database/demo-data.sql` (5 routes, 13 buses, 150 students, about 780 reservations) into `campus_bus_demo` and replaces every password with a random one kept only on that computer. `mvn clean compile exec:java -Ddemo=true` on a new empty database loads the same data with the test fixture passwords used by `DatabaseTest`; never load it into a real institution's database.
 
 Other ways to run: open the folder as a Maven project in IntelliJ / Eclipse / VS Code and run `com.collegebus.Main` (working directory = project folder, so `db.properties` is found).
 
@@ -88,7 +108,7 @@ Other ways to run: open the folder as a Maven project in IntelliJ / Eclipse / VS
 | Students | *Create a student account* on the Student side of the login screen (password typed twice) |
 
 Student sign-in, admin sign-in, student sign-up and admin creation are four separate paths. Passwords are kept simple on purpose: 4-64 characters, no other rules (`User.checkNewPassword`). They are still stored only as salted PBKDF2 hashes.
-| Demo data only (`-Ddemo=true`) | `student@college.com` / `student123`; `ananya@college.com`, `student1@college.com` … `student140@college.com` / `pass123` |
+| Demo (`setup-windows.cmd`) | `demo.admin` and the demo students: random passwords in `%APPDATA%\CampusBus\demo-accounts.txt` on that computer |
 
 No real password is written in this repository. Local demo/test credentials live outside the project folder.
 
@@ -265,7 +285,7 @@ Seat map (JS) → app.book(bus, date, direction, seat) → WebBridge.book() → 
 
 ## 11. Presentation workflow
 
-**Student:** sign in as `student@college.com` → Home (next bus, Where's my bus) → *Find a bus* → From *Edappally*, *Tomorrow* (the time shown is when the bus reaches Edappally) → *View seats* → green seat → *Confirm seat* → pass with "Confirmed" stamp → *My reservations* → *Cancel* → the seat is green again. Try ⇄ to search the trip home.
+**Student:** sign in as `student@college.example.com` → Home (next bus, Where's my bus) → *Find a bus* → From *Edappally*, *Tomorrow* (the time shown is when the bus reaches Edappally) → *View seats* → green seat → *Confirm seat* → pass with "Confirmed" stamp → *My reservations* → *Cancel* → the seat is green again. Try ⇄ to search the trip home.
 
 **Admin:** sign in with the admin created at setup → Overview → *Buses* → *Add bus* → *Edit* (evening trip: No) → *Schedules* → *Timetable* (change class start: every bus re-times) → *Stop times* → *Seat map* (passenger list) → *Students* → *Remove* (see the confirmation) → *Reservations* (choose a period) → *Admins* → *Add admin*.
 

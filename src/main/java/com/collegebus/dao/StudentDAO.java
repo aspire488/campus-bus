@@ -53,6 +53,11 @@ public class StudentDAO {
         }
     }
 
+    /** Demo setup only: gives every student the same password hash (the demo database, never a real one). */
+    public void setAllPasswords(String passwordHash) throws SQLException {
+        Queries.update("UPDATE students SET password=?", passwordHash);
+    }
+
     public void savePassword(com.collegebus.model.User s) throws SQLException {
         Queries.update("UPDATE students SET password=? WHERE student_id=?", s.getPasswordHash(), s.getId());
     }
