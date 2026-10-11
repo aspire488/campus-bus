@@ -3,6 +3,7 @@ package com.collegebus;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.collegebus.model.*;
+import com.collegebus.util.DatabaseConnection;
 import com.collegebus.util.Json;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -322,6 +323,15 @@ class ModelTest {
 
     @Test void simplePasswordsAreAccepted() {
         for (String pw : new String[]{"1234", "riya", "pass123", "Secret#91x"}) assertDoesNotThrow(() -> User.checkNewPassword(pw));
+    }
+
+    @Test void settingsAreFoundFromAnyFolder() {
+        java.nio.file.Path project = java.nio.file.Path.of("/work/campus-bus").toAbsolutePath();
+        // started from another folder: the working folder first, then the project the classes came from
+        assertEquals(List.of(java.nio.file.Path.of("/tmp/db.properties").toAbsolutePath(), project.resolve("db.properties")),
+            DatabaseConnection.candidates(java.nio.file.Path.of("/tmp").toAbsolutePath(), project.resolve("target/classes")));
+        assertEquals(List.of(project.resolve("db.properties")), DatabaseConnection.candidates(project, project.resolve("target/app.jar")));
+        assertEquals(List.of(project.resolve("db.properties")), DatabaseConnection.candidates(project, null));
     }
 
     @Test void admissionNumbersAsIssued() {

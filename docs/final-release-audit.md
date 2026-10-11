@@ -71,7 +71,7 @@ Checked at 1024×640 and 1320×816 on login, search, seat map (25-stop route, 49
 
 ## 10. GitHub release: launcher and acceptance (2026-10-11)
 
-Build: `mvn clean compile`, `mvn clean test` (128/128), `mvn clean package` (jar) all BUILD SUCCESS. Launcher `run-campus-bus.cmd`: window opens; Java missing / Maven missing / `db.properties` missing each print a clear message and exit 1.
+Build: `mvn clean compile`, `mvn clean test` (120/120 at that point; 121 after the portability fixes), `mvn clean package` (jar) all BUILD SUCCESS. Launcher `run-campus-bus.cmd`: window opens; Java missing / Maven missing / `db.properties` missing each print a clear message and exit 1.
 
 Changes in this step: class typed into the drop-down is always saved (registration, profile, admin edit); new-password rule (later simplified on request to 4-64 characters); admin sign-in side states where admins are created.
 

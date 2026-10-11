@@ -1,26 +1,64 @@
 package com.collegebus.util;
 
-import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
 /**
  * JDBC entry point: every DAO asks this class for a Connection.
  * Each setting (db.host, db.name, db.user, db.password) is read from, in order:
- * a -D system property, an environment variable (CAMPUS_BUS_DB_HOST ...), db.properties in the project folder.
- * No password is written in the source code.
+ * a -D system property, an environment variable (CAMPUS_BUS_DB_HOST ...), db.properties.
+ * db.properties is looked for in the current folder, then in the project folder the app was started from.
+ * Without any of these the app refuses to guess (no silent root@localhost). No password is written in the source code.
  */
 public final class DatabaseConnection {
     private static final Properties FILE = new Properties();
+    private static final List<Path> LOOKED_IN = candidates(Path.of("").toAbsolutePath(), codeHome());
+    private static boolean fileFound;
 
     static {
-        try (InputStream in = new FileInputStream("db.properties")) {
-            FILE.load(in);
-        } catch (Exception e) {
-            System.out.println("db.properties not found - using -D options / environment variables / defaults");
+        for (Path p : LOOKED_IN) {
+            if (!Files.isRegularFile(p)) continue;
+            try (InputStream in = Files.newInputStream(p)) {
+                FILE.load(in);
+                fileFound = true;
+                System.out.println("Database settings: " + p);
+                break;
+            } catch (Exception e) {
+                System.out.println("Could not read " + p + ": " + e.getMessage());
+            }
         }
+        if (!fileFound) System.out.println("db.properties not found in " + LOOKED_IN + " - using -D options / environment variables");
+    }
+
+    /** db.properties in the working folder, then in the project folder (two levels above target/classes or target/app.jar). */
+    public static List<Path> candidates(Path workingDir, Path codeHome) {
+        List<Path> list = new ArrayList<>(List.of(workingDir.resolve("db.properties").normalize()));
+        if (codeHome != null && codeHome.getParent() != null && codeHome.getParent().getParent() != null) {
+            Path project = codeHome.getParent().getParent().resolve("db.properties").normalize();
+            if (!list.contains(project)) list.add(project);
+        }
+        return list;
+    }
+
+    private static Path codeHome() {
+        try { return Path.of(DatabaseConnection.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toAbsolutePath(); }
+        catch (Exception e) { return null; }
+    }
+
+    /** True when the user gave database settings somewhere: db.properties, -Ddb.user or CAMPUS_BUS_DB_USER. */
+    static boolean configured() {
+        return fileFound || System.getProperty("db.user") != null || System.getenv("CAMPUS_BUS_DB_USER") != null;
+    }
+
+    static String missingSettings() {
+        return "No database settings: copy db.properties.example to db.properties in " + LOOKED_IN.get(LOOKED_IN.size() - 1).getParent()
+            + " and fill in your MySQL user and password.";
     }
 
     private DatabaseConnection() { }
@@ -33,12 +71,14 @@ public final class DatabaseConnection {
     public static String databaseName() { return setting("db.name", "college_bus_db"); }
 
     private static Connection open(String database) throws SQLException {
+        if (!configured()) throw new SQLException(missingSettings(), "08001");
         String url = "jdbc:mysql://" + setting("db.host", "localhost:3306") + "/" + database + "?connectTimeout=3000";
         return DriverManager.getConnection(url, setting("db.user", "root"), setting("db.password", ""));
     }
 
     /** A message a normal user can act on: server down vs. wrong user/password/permissions (no stack trace, no password). */
     public static String explain(Throwable e) {
+        if (!configured()) return missingSettings();
         String state = e instanceof SQLException s && s.getSQLState() != null ? s.getSQLState() : "";
         if (state.startsWith("28") || state.equals("42000"))
             return "MySQL refused access. Check db.user, db.password and db.name in db.properties.";

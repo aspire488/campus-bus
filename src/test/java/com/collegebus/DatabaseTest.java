@@ -23,16 +23,19 @@ class DatabaseTest {
     private CollegeBusSystem sys;
     private ReservationService rs;
 
+    private static String unavailable;     // why MySQL can't be used; each test is then reported as skipped
+
     @BeforeAll static void useTestDatabase() {
         System.setProperty("db.name", "college_bus_test");
         try {
             DatabaseConnection.ensureDatabase();
         } catch (Exception e) {
-            Assumptions.abort("MySQL not reachable: " + e.getMessage());
+            unavailable = "MySQL not reachable: " + e.getMessage();
         }
     }
 
     @BeforeEach void resetData() throws Exception {
+        Assumptions.assumeTrue(unavailable == null, () -> unavailable);
         DatabaseConnection.loadSchema();
         sys = new CollegeBusSystem();
         sys.setUpInstitution("Test Institute", "Admin", "Transport Office", "Office#2026");   // first-run setup

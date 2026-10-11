@@ -29,10 +29,25 @@ Taken from the running app with synthetic test accounts (no real student data).
 
 ## 1. Quick start
 
-**You need:** JDK 17+, Apache Maven 3.8+, MySQL 8 (server running).
+**You need:** JDK 17+, Apache Maven 3.8+, MySQL 8 (server running). Windows, macOS or Linux, with a desktop (the app is a window, not a website).
 
-1. Copy `db.properties.example` to `db.properties` and fill in your MySQL user and password.
-   `db.properties` is git-ignored, so the password never enters the repository. Every value can also come from an environment variable (`CAMPUS_BUS_DB_PASSWORD`, …) or a `-D` option (`-Ddb.password=…`).
+**On a new computer, step by step:**
+
+```bash
+git clone https://github.com/aspire488/campus-bus.git
+cd campus-bus
+```
+
+Then create a MySQL user for the app (once, as the MySQL root user; choose your own password):
+
+```sql
+CREATE USER 'campus_bus'@'localhost' IDENTIFIED BY 'choose-a-password';
+GRANT ALL ON college_bus_db.*   TO 'campus_bus'@'localhost';
+GRANT ALL ON college_bus_test.* TO 'campus_bus'@'localhost';   -- only needed for mvn test
+```
+
+1. Copy `db.properties.example` to `db.properties` and fill in that user and password (`db.user=campus_bus`, `db.password=…`).
+   `db.properties` is git-ignored, so the password never enters the repository. The app looks for it in the folder you start from, then in the project folder. Every value can also come from an environment variable (`CAMPUS_BUS_DB_PASSWORD`, …) or a `-D` option (`-Ddb.password=…`). With no settings at all the app stops with a clear message; it never guesses a MySQL user. The database and its tables are created automatically on the first launch.
 2. Start the app. On Windows the easiest way is to double-click **`run-campus-bus.cmd`** in the project folder: it checks Java, Maven and `db.properties`, then opens the window and explains any problem. The terminal waits while the app is open and returns when you close it.
 
 PowerShell (the default Windows terminal):
@@ -49,7 +64,14 @@ cd /d D:\campus-bus
 run-campus-bus.cmd
 ```
 
-Any system, with Maven directly: `mvn clean compile exec:java` from the project folder (later launches: `mvn exec:java`). Use your own project folder in place of `D:\campus-bus`.
+macOS / Linux:
+
+```bash
+cd campus-bus
+sh run-campus-bus.sh
+```
+
+Any system, with Maven directly: `mvn clean compile exec:java` from the project folder (later launches: `mvn exec:java`). Use your own project folder in place of `D:\campus-bus`. `mvn package` builds and tests a library jar; it is not a stand-alone double-click jar, so start the app with one of the commands above.
 
 On the very first launch the app creates an **empty** database from `database/schema.sql`, then opens **Set up your institution**: the institution's name and its first administrator (password typed twice). This screen appears once; after that the app opens at the login screen. More administrators are added inside the admin console, never through a public form. The admin then sets the timetable and imports the bus schedule (Admin → Routes → *Import schedule*, e.g. `database/scms-schedule-2025-08-18.txt`); students create their own accounts.
 
@@ -253,7 +275,7 @@ Seat map (JS) → app.book(bus, date, direction, seat) → WebBridge.book() → 
 mvn clean test
 ```
 
-`ModelTest` (no database) checks validation and rules: registration, bus/route/timetable rules, return trips, the position estimate, JSON escaping. `DatabaseTest` runs the real JDBC code against a separate database, `college_bus_test`, reset from `schema.sql` before each test: login, setup-only-once, admin accounts, search both ways, booking rules, seat races (concurrent bookings and cancellations), timetable re-timing, student removal, overview numbers. It is skipped, not failed, when no MySQL server is reachable.
+`ModelTest` (no database) checks validation and rules: registration, bus/route/timetable rules, return trips, the position estimate, JSON escaping. `DatabaseTest` runs the real JDBC code against a separate database, `college_bus_test`, reset from `schema.sql` before each test: login, setup-only-once, admin accounts, search both ways, booking rules, seat races (concurrent bookings and cancellations), timetable re-timing, student removal, overview numbers. Without a reachable MySQL (or without database settings) its 36 tests are reported as skipped, not failed, so `mvn test` still works on a computer without MySQL.
 
 ## 13. Troubleshooting
 
@@ -263,6 +285,7 @@ mvn clean test
 | *MySQL refused access* | Wrong `db.user` / `db.password`, or that user has no rights on `db.name`. |
 | Setup screen does not appear | An administrator already exists in this database; sign in as admin. |
 | `mvn` not recognised | Install Maven and add its `bin` folder to PATH, or run `Main` from your IDE. |
+| *No database settings* | Create `db.properties` from `db.properties.example` in the project folder. |
 | Window too big | The window sizes itself to your screen; it needs at least 1024 × 640. |
 
 Fonts: Overpass and Overpass Mono, SIL Open Font License (`assets/fonts/OFL.txt`).
@@ -270,3 +293,12 @@ Fonts: Overpass and Overpass Mono, SIL Open Font License (`assets/fonts/OFL.txt`
 ## 14. The SCMS schedule
 
 `database/scms-schedule-2025-08-18.txt` is a hand transcription of *College Bus Schedule w.e.f 18.08.2025* (SCMS School of Engineering and Technology, Karukutty): 21 buses, 259 boarding points (86 printed without a time). Its header lists every transcription decision and the 5 ambiguous values to confirm with the transport office; driver names and phone numbers are deliberately not included. `docs/scms-import-report.md` compares what the database holds with the file, bus by bus.
+
+## 15. Using it on several computers
+
+| Question | Answer |
+|---|---|
+| Can another computer get the source? | Yes: the repository is public, `git clone` needs no account. |
+| Can it build and test? | Yes, with JDK 17+ and Maven: `mvn clean package` (database tests are skipped if MySQL is absent). |
+| Can it run the app? | Yes, with its own MySQL and its own `db.properties` (steps in section 1). It then has its **own, separate data**. |
+| Do two computers share the same buses and bookings? | Only if both `db.properties` point to the **same MySQL server** (`db.host=server-address:3306`). That server must be reachable on the network and secured: a dedicated MySQL user per installation with only the needed rights, TLS, and a firewall that admits only the college network or a VPN. Never expose MySQL to the open internet. Every installed copy holds that user's password, so for many users across the internet a small server API in front of the database is the safer design. |
