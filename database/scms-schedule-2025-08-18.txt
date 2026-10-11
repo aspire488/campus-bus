@@ -1,0 +1,62 @@
+# SCMS School of Engineering and Technology, Karukutty - college bus schedule from 18/8/2025
+#
+# Source: "College Bus Schedule w.e.f 18.08.2025.pdf" - 2 scanned pages, heading "SCMS SCHOOL OF ENGINEERING TECHNOLOGY,
+# KARUKUTTY / College bus schedule from 18/8/2025", signed by the Principal (dated 14/8/25), footer "Maintain the above
+# stipulated stops and timing strictly." Transcribed by hand from the page images (the scan has no reliable text layer).
+#
+# Import: Admin > Routes > Import schedule. Running it again does not duplicate buses or routes.
+#
+# Format: one line per bus, in the order printed:  bus number | stops in printed order, separated by ";"
+#   "Name HH:MM" = a time printed for that stop.  "Name" alone = no time printed (the app shows an estimate, marked as such).
+#   Stop names are kept as printed, including spelling and capitals.
+# The importer adds the campus as the last stop. The PDF prints no campus arrival time and no evening timetable:
+# those come from Admin > Schedules > Timetable (institution settings: classes 08:45, campus arrival window 08:20-08:40,
+# evening departure 16:00) and are always shown as targets / estimates, never as printed times.
+# Driver names and phone numbers in the PDF are deliberately not imported (personal data, not needed for booking).
+#
+# Transcription notes (review with the transport office):
+#  1. Where the first stop has no printed time, it gets the start time from the "STARTING PLACE / TIME" column:
+#     08 High Court 07:20, 09 Palarivattom 07:30, 10 Kakkanad Alinchuvadu 07:25, 11 Edapally Toll 07:30,
+#     15 Thrissur 07:00, 19 Paravoor M. O 07:20, 22 Perumbavoor 07:45, 26 Kodungallore 07:20, 28 KMK 07:20.
+#  2. AMBIGUOUS - bus 28: the start column says "PARAVOOR 07.20" but the first boarding point printed is "KMK", then "Paravoor".
+#     07:20 is given to KMK (the first stop). Confirm whether the bus starts at KMK or at Paravoor.
+#  3. AMBIGUOUS - bus 05 ends "Thoshiba, HMT 7.45": imported as two stops (Thoshiba, then HMT 07:45), like every other comma.
+#     Confirm whether "Thoshiba, HMT" is one boarding point.
+#  4. AMBIGUOUS - bus 22: printed "Vallarn7.55" (likely "Vallam"); kept as printed: "Vallarn".
+#  5. AMBIGUOUS - bus 25: printed "poochakkal, Cheloor, 7.25,"; 07:25 is given to Cheloor.
+#  6. AMBIGUOUS - bus 10: "Aluva Companypady, Garage 7.45" imported as two stops; confirm "Garage" is a separate point.
+#  7. Printing artifacts dropped: "Pulinchode 7.50." (trailing dot), "Aluva.7.45" (dot), "Colony pady;" (semicolon),
+#     "Ettekkar( B.M.C)" spacing -> "Ettekkar (B.M.C)". Times written 6.50 in the PDF are HH:MM here (all morning).
+#  8. Spellings kept as printed although they differ from the start column or look like typos:
+#     21 header "MOOVATTUPUZHA" / stop "Moovathupuzha"; 07 header "THOPPUMPADY" / stop "Thoppumpadi";
+#     27 "Kakknad bus stand"; 21 "Parrrambayam"; 11 "Edaplly station"; 19 "Kadungallore"; 23 "Appolo Tyers".
+#  9. The Thrissur buses 24, 15 and 16 are three separate services with different stops; Paravoor buses 19 and 28 likewise.
+# 10. Bus 14 starts at "S.C.M.S. Muttom" (not the Karukutty campus).
+# 11. Corrected at the institution's request: buses 15 and 16 print "TRICHUR" / "Trichur"; imported as "Thrissur"
+#     (the same city, matching bus 24). This is the only stop name changed from the print.
+
+institution: SCMS School of Engineering and Technology, Karukutty
+campus: SCMS Campus Karukutty
+capacity: 49
+
+05 | Poothotta 06:50; chakkulam 06:50; karaparambu 06:52; kochupally 06:52; patthammile 06:55; nadakkavu 07:00; valiyakulam 07:00; mankayi kavala 07:02; udayamprroor 07:03; puthiyakavu 07:05; Tripunithura 07:10; Karingachira 07:15; Manakkapadi 07:25; Eachamukku; Kakkanad Civil Station 07:35; Kakkanad Pally; Vallathol Nagar 07:40; Thoshiba; HMT 07:45
+06 | Aroor 07:05; Madavana 07:10; Kundannore 07:15; Vytilla 07:20; Geethanjali; Chalikkavattom; Chakkraparambu 07:25; Pipeline; Vyshali; E.M.C 07:30; Anchumana 07:35
+07 | Thoppumpadi 07:05; Naval Base; Thevara 07:15; Valanjambalam; GCDA 07:20; Ellamkulam 07:20; Kalamassery M. Office 07:40; Thottakkattukara 07:55
+08 | High Court 07:20; Kacheripady 07:22; Ernakulam North; Lisie; Kaloor 07:25; Deshabimani; Stadium; Muttam 07:40; Thikkavu; Paravoor Junction 07:55
+09 | Palarivattom 07:30; Mamangalam 07:30; Edapally toll; Edapally H.S 07:35; Edapally Station; Chenganpuzha Park 07:35; Kalamassery Appolo Tyres 07:40
+10 | Kakkanad Alinchuvadu 07:25; Chembumukku; Vazhakala 07:25; Padamughal; Kakkanad civil station 07:30; B.M.C; HMT; Thaikkavu 07:40; Aluva Companypady; Garage 07:45; Pulinchode 07:50; Kothakulangara 08:10; Karayamparambu 08:10; Elavoor kavala; Karukutty arreekkal; Kappela; companypady 08:10
+11 | Edapally Toll 07:30; Edapally H S; Edaplly station 07:30
+12 | Njarakkal 07:00; velaythuparambu 07:03; kudangassery 07:03; kochambalam 07:05; nayrambalam 07:08; pazhangad 07:10; edavanakkadu 07:12; pallathamkulangara 07:12; kuzhupilly 07:13; ayyampilly 07:15; gowriswaram 07:16; dewasamnada 07:17; chearai 07:18; Prabhus; Paravoor M.O 07:20; Mavinchuvadu 07:33; Mannam Kavala 07:35; Manjaly 07:40; Chalaka; Kunnukara; Kuttipuzha 07:45; South Aduvassery 07:50; Palapprassery; Chengamanadu 07:50
+24 | Thrissur 07:00; Amballoor 07:25; Chalakkudy (under passage) 07:55; Murungoor 08:00; Koratty 08:05; Konur 08:05
+15 | Thrissur 07:00; East fort 07:05; Chealakkottukara; Ancheri 07:15; Kuttanellore Bypass 07:20; Puthukkad Police Station; Nandikara 07:40; Nellayi R.Station; Kodakara 07:45; Perambra 07:50
+16 | Thrissur 07:00; Mundupalam; Sakthan Stand; Kuriyachira 07:05; Companipady; Ollur Center 07:15; Ollur Pump; Paliyekkara toll 07:20; Thalore Bypass; Amballore 07:30; Puthukkad; Nellayi 07:35; Kolathure 07:40
+19 | Paravoor M. O 07:20; Chendamangalam; Vedimara; Manakkapady 07:35; Shappumpady 07:35; Thattampady 07:40; Kottapuram; Malikampeedika 07:45; U.C.College; Kaniyankunnu; Kadungallore 07:50
+21 | Moovathupuzha 06:40; pezhakkapilly; Paipra 06:45; Thrikalathoor 06:50; Mannoor 06:55; Keezhillam 07:00; Kanaal; Pulluvazhi 07:00; Vattkkattupady; Perumbavoor 07:15; Mudikkal 07:20; Marampilly 07:25; Kuttamassery; Thottumugham 07:35; Aluva 07:45; Desom 07:48; Kunnumpuram 07:50; Parrrambayam; Kerala ayurveda pharmacy; Athani 07:55; Telk 07:58
+22 | Perumbavoor 07:45; Kaduval 07:50; Vallarn 07:55; Chelamattom; Okkal; Thannipuzha; Kalady 08:00; Marottichodu; Vengoor; Kidangoor kavala; Nayathodu Junction 08:10; Oliyan kappela 08:10
+23 | Vaduthala Bridge 07:20; Chittor Temple 07:25; Chittor Shappumpadi; Cheranallor 07:30; Manjummel; Aanavathil; Appolo Tyers 07:40; Nedumbassery P.O 07:55; Kariyad 08:00; Vapalassery 08:00
+25 | MOONNUPEEDIKA 07:15; PALLIVALAVU 07:16; KAKKATHURUTHU 07:20; EDATHIRINJI 07:22; poochakkal; Cheloor 07:25; Irinjalakuda 07:30; Dhanavu 07:30; Kollattu 07:35; Pulloore 07:40; Kallettumkara 07:45; Alloore 07:50; Kanal Palam; Potta 07:55; Chalakkudy 07:58
+26 | Kodungallore 07:20; North Nada; Keetholi 07:25; Anapuzha; Krishnankotta 07:35; Mala 07:40; Annamanada 08:05; Pulikkakadavu 08:05
+27 | Kakknad bus stand 07:05; B.M.C.kakkanad; Mundanpalam; Kangarapady 07:10; Thevakkal 07:15; Kuzhuveli pady; Malikkapady; Pookkattupady 07:25; Kunjattukara; NAD; Edathala; Edathala panchayath; SOS Edathala; Ettekkar (B.M.C); Choondy 07:35; Colony pady; Powerhouse; Pump kavala; Aluva seemas 07:45; Telk 07:55
+28 | KMK 07:20; Paravoor; Chittattukara; Karayadu; Munambam Kavala; Chaktumassery 07:25; Thuruthupuram; Andipillikkavu; Madapalathuruth; Kuriyappilli; Labour JN 07:30; Moothakunnam; VP Thuruthu; TKS puram 07:32; Keetholli 07:35; Anapuzha; Krishnankotta 07:45; Poyya 07:50; Annamanada 08:05; Pulikkakadavu 08:05
+14 | S.C.M.S. Muttom 07:40; Ambattukavu 07:40; Angamaly 08:00
+20 | VARAPUZHA 07:15; KOONAMAVU 07:20; Kongorpilly 07:25; chirayam 07:25; PAANAYIKULAM 07:30; Edayar 07:40; MUPPATHADAM 07:45; Peedikapadi 07:45; West kadungallore 07:45; EAST KADUNGALLORE 07:50; Thottakkattukara 07:55

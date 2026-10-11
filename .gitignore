@@ -1,0 +1,13 @@
+target/
+*.class
+db.properties
+.idea/
+.vscode/
+*.iml
+*.log
+*.dump
+*.bak
+*.env
+.env
+*credentials*
+backups/

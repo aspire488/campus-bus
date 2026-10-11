@@ -1,0 +1,8 @@
+# Copy this file to db.properties and fill in your MySQL details.
+# db.properties is git-ignored, so your password never ends up in the repository.
+# Every value can also be given as an environment variable (CAMPUS_BUS_DB_HOST, CAMPUS_BUS_DB_USER,
+# CAMPUS_BUS_DB_PASSWORD, CAMPUS_BUS_DB_NAME) or as a -D option (-Ddb.password=...).
+db.host=localhost:3306
+db.name=college_bus_db
+db.user=root
+db.password=

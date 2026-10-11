@@ -1,0 +1,74 @@
+id,screen,control or behaviour,check,method,status,evidence
+S01,First-run setup,Create administrator,valid institution + admin; window appears only when no admin exists,GUI harness + DatabaseTest,PASS,setup opens before login on empty DB; insertFirst is a single INSERT...WHERE NOT EXISTS
+S02,First-run setup,validation,blank institution; short password; mismatched repeat; <html> in name,GUI harness,PASS,each refused with its message
+S03,First-run setup,Cancel / window close,app exits without creating anything,GUI harness,PASS,no admin row created
+S04,Login,Student / Admin switch,separate sign-in modes; fields cleared on switch,GUI harness,PASS,labels and actions change; no carry-over
+S05,Login,Continue (student),email or admission number; any case; wrong password; unknown; blank; whitespace; SQL-injection text,GUI harness + DatabaseTest,PASS,9 cases; SCS/10001/26 typed lower-case signs in
+S06,Login,Continue (admin),valid; wrong; unknown; blank; student credentials on admin side,GUI harness,PASS,9 cases
+S07,Login,double-click Continue,one dashboard only,GUI harness,PASS,one window
+S08,Login,Enter key in password field,submits sign-in,real keystrokes,PASS,typed + Tab + Enter opened the dashboard
+S09,Registration,Create account,admission number + class + password twice,GUI harness + DatabaseTest,PASS,SCS/10001/26 / S3 CS2 created; row verified
+S10,Registration,validation,13 cases incl. duplicate admission no./email; bad email/phone; HTML name; short/blank/65-char password; mismatch; S9 semester; /SCS/1,GUI harness + ModelTest,PASS,each refused with its message
+S11,Registration,double-click Create account,one row,GUI harness,PASS,exactly one row in DB
+S12,Registration,Escape / Cancel,closes without saving,GUI harness (real Escape key),PASS,no row created
+S13,Student rail,Home / Find a bus / My reservations / Profile / Log out,navigate and highlight,GUI harness,PASS,each page opens; logout returns to login
+S14,Home,search strip (From / To / Date / Find a bus),submits to Find a bus with values kept,GUI harness,PASS,From Lisie + Tomorrow -> 2 trips
+S15,Home,empty state Find a bus,opens search,GUI harness,PASS,
+S16,Home,View pass (next bus),opens pass,GUI harness (earlier rounds),PASS,
+S17,Home,Where's my bus,estimated position; rider's stop marked; labelled not GPS,GUI harness + ModelTest,PASS,
+S18,Find a bus,From / To / Date / Leaving after / Bus / Sort,filters and sort,GUI harness + DatabaseTest,PASS,Kaloor 8 trips; after 08:00 -> 7; sort by free seats
+S19,Find a bus,swap (⇄),swaps From and To,GUI harness,PASS,
+S20,Find a bus,no results + Clear filters,empty state then reset,GUI harness,PASS,resets to today by design
+S21,Find a bus,View seats,opens the trip's seat map,GUI harness,PASS,
+S22,Seat map,back link (All buses / Schedules),returns to the right page,GUI harness,PASS,
+S23,Seat map,seat states,available / selected / booked / unavailable / yours,GUI harness,PASS,49-seat bus; booked red; departed hatched
+S24,Seat map,select and re-click seat,select / clear,GUI harness,PASS,
+S25,Seat map,stop picker (getting on / off),required; defaults to searched stop; campus excluded,GUI harness + DatabaseTest,PASS,empty -> "Choose the stop where you get on."
+S26,Seat map,Confirm seat (and double-click),one booking,GUI harness + DatabaseTest,PASS,
+S27,Seat map,race for the same seat,second student refused; seat shown booked,GUI harness + DatabaseTest (concurrent),PASS,"Seat N was just taken"
+S28,Seat map,one seat each way each day,second bus same direction refused,GUI harness + DatabaseTest,PASS,
+S29,Seat map,My reservations button (already have a seat),opens trips,source review only,UNTESTED,same handler as the rail item
+S30,Pass,content,student; stop + time; bus; route with every stop; target arrival; seat; reference,GUI harness,PASS,
+S31,Pass,another student's pass,refused server-side,bridge call as other student,PASS,"belongs to another student"
+S32,Pass,Print pass,system print dialog opens; cancel prints nothing,GUI harness (real dialog),PASS,printer queue empty after cancel
+S33,Pass,printed page,one A4 page; pass only; white paper; colours kept,Microsoft Print to PDF,PASS,PDF inspected
+S34,Pass,physical paper printing,,not performed,BLOCKED,deliberately not printed on the real printer
+S35,Pass,My reservations button,opens trips,source review only,UNTESTED,same handler as the rail item
+S36,My reservations,tabs (Upcoming / On the road / Completed / Cancelled),filter lists; counts,GUI harness,PASS,
+S37,My reservations,View pass,opens pass,GUI harness,PASS,
+S38,My reservations,Cancel -> Keep it,nothing changes,GUI harness + DB check,PASS,still BOOKED in DB
+S39,My reservations,Cancel -> Cancel reservation,cancelled; seat free; persists after restart,GUI harness + DB check,PASS,
+S40,My reservations,cancel twice,second refused,bridge call,PASS,"already cancelled"
+S41,My reservations,empty Upcoming Find a bus,opens search,GUI harness,PASS,
+S42,Profile,Save changes,valid save; invalid phone refused; typed class saved,GUI harness,PASS,
+A01,Admin rail,7 pages + Log out,navigate; spacing adapts to window height,GUI harness,PASS,1024x640 and 1320x816
+A02,Overview,figures / departure board / chart,read from MySQL,GUI harness + DatabaseTest,PASS,real DB: 21 of 30 running
+A03,Buses,Add bus,valid; bad number; arrival rules; capacity; duplicate; double-click,GUI harness + DatabaseTest,PASS,
+A04,Buses,Edit (no row selected),"""Select a row first""",GUI harness,PASS,was opening Add before an earlier fix
+A05,Buses,Edit,route / first pick-up / evening trip / seats / status,GUI harness,PASS,
+A06,Buses,Remove,Keep it; refused while booked; removed when free,GUI harness + DatabaseTest,PASS,
+A07,Buses,search + status filter,,GUI harness,PASS,
+A08,Routes,Add route,untimed stops allowed; backwards times refused; Cancel changes nothing,GUI harness,PASS,
+A09,Routes,Edit,checked against every bus on it before saving,GUI harness + DatabaseTest,PASS,lock-out regression test (red-green)
+A10,Routes,Remove,Keep it; Yes; refused while buses use it,GUI harness,PASS,
+A11,Routes,Import schedule…,file chooser; report; idempotent; verified read-back,GUI harness + DatabaseTest,PASS,21 added / 21 verified; rerun 21 unchanged
+A12,Schedules,Timetable,window/class/evening validation; printed times never move,GUI harness + DatabaseTest,PASS,
+A13,Schedules,Stop times,printed / ≈ estimated / campus target,GUI harness,PASS,
+A14,Schedules,Seat map + day picker + passenger list with stops,,GUI harness,PASS,
+A15,Schedules,Remove,Keep it; refused while booked; stays on Schedules,GUI harness,PASS,
+A16,Schedules,direction filter + search,,GUI harness,PASS,
+A17,Students,Edit,valid; invalid phone; Escape changes nothing,GUI harness,PASS,
+A18,Students,Remove,confirmation shows released seats; cannot sign in afterwards,GUI harness + DatabaseTest,PASS,
+A19,Students,department filter (from class),S3 CS2 -> CS,GUI harness + ModelTest,PASS,CS -> 26 of 154
+A20,Reservations,period chooser,today+7 / today / tomorrow / last 7 / last 30,GUI harness,PASS,real DB last 30 days: 31 of 31
+A21,Reservations,department + status filters,,GUI harness,PASS,CS -> 29 of 205
+A22,Reservations,Cancel reservation,confirm then cancelled,GUI harness,PASS,
+A23,Admins,Add admin,password twice; duplicate username refused,GUI harness + DatabaseTest,PASS,
+A24,Admins,Remove,not yourself; not the last admin; removed admin locked out (open window and dialogs),GUI harness + DatabaseTest,PASS,
+A25,Admins,Institution name,saved; shown on login / rail / pass,GUI harness,PASS,
+X01,All dialogs,Escape closes / Enter saves,,GUI harness (real Escape),PASS,Enter-to-save not pressed with a real key: see S08
+X02,All screens,keyboard focus order (Tab),,not performed,UNTESTED,
+X03,All screens,window 1024x640 and 1320x816,no clipping / overlap / sideways scroll,GUI harness screenshots,PASS,fixed: search results; toolbar; rail; seat header
+X04,All screens,MySQL stopped then restarted,clear message; no stack trace; recovers,GUI harness (earlier round),PASS,
+X05,All screens,restart persistence,bookings and cancellations survive restart,GUI harness,PASS,
+X06,Real database,preservation,counts identical before and after this pass,SQL,PASS,31 / 10 / 30 / 28 / scms.transport / SCMS
