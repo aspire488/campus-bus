@@ -37,6 +37,9 @@ Copy-Item setup-windows.cmd, run-campus-bus.cmd, reset-demo.cmd $dist
 Copy-Item scripts\campus-bus.ps1 "$dist\scripts\"
 Copy-Item packaging\README-WINDOWS.txt $dist
 if (Get-ChildItem $dist -Recurse -Include db.properties, *.cnf, demo-accounts.txt) { Write-Host 'A settings file ended up in the release. Stopping.'; exit 1 }
-Compress-Archive -Path $dist -DestinationPath "target\dist\$name.zip" -Force
+# standard zip (forward slashes, top folder included) that Windows "Extract All" and other tools unpack correctly
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+Remove-Item "target\dist\$name.zip" -ErrorAction SilentlyContinue
+[System.IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path $dist).Path, (Join-Path (Resolve-Path 'target\dist').Path "$name.zip"), 'Optimal', $true)
 $size = [int]((Get-Item "target\dist\$name.zip").Length / 1MB)
 Write-Host "Release: target\dist\$name.zip ($size MB)"
