@@ -25,11 +25,10 @@ public class Student extends User {
 
     /** PPT method: validates and stores new-student details. */
     public void registerStudent(String regNo, String name, String email, String password, String department, String phone) {
-        String reg = regNo.trim().toUpperCase(), mail = email.trim().toLowerCase();
+        String reg = regNo.trim().toUpperCase();
         if (!reg.matches("[A-Z0-9][A-Z0-9/-]{5,19}") || !reg.matches(".*\\d.*"))
             throw new IllegalArgumentException("Admission number: 6-20 letters, digits, / or -, e.g. SCS/10001/26.");
-        if (mail.length() > 100 || !mail.matches("[a-z0-9._%+-]+@[a-z0-9-]+(\\.[a-z0-9-]+)*\\.[a-z]{2,}"))
-            throw new IllegalArgumentException("Enter a valid email address, e.g. name@college.example.com.");
+        String mail = checkEmail(email);
         checkNewPassword(password);
         validate(name, department, phone);              // everything is checked before anything is changed
         this.regNo = reg;
@@ -38,10 +37,18 @@ public class Student extends User {
         updateStudent(name, department, phone);
     }
 
+    /** Any real mailbox (Gmail, college, other providers), stored in lower case; nothing is ever appended to it. */
+    public static String checkEmail(String email) {
+        String mail = email.trim().toLowerCase();
+        if (mail.length() > 100 || !mail.matches("[a-z0-9._%+-]+@[a-z0-9-]+(\\.[a-z0-9-]+)*\\.[a-z]{2,}"))
+            throw new IllegalArgumentException("Enter a valid email address, e.g. name@gmail.com.");
+        return mail;
+    }
+
     private static void validate(String name, String department, String phone) {
         String n = name.trim();
         if (n.length() < 3 || n.length() > 80) throw new IllegalArgumentException("Name needs 3-80 characters.");
-        if (!n.matches("[\\p{L} .'-]+")) throw new IllegalArgumentException("Name can only contain letters, spaces and . ' -");
+        if (!n.matches("[\\p{L}\\p{M} .'-]+")) throw new IllegalArgumentException("Name can only contain letters, spaces and . ' -");   // \p{M}: vowel signs, combining accents
         if (department == null || department.isBlank()) throw new IllegalArgumentException("Choose or type your class, e.g. S3 CS2.");
         if (department.trim().length() > 40 || !department.trim().matches("[\\p{L}\\d .&'()/-]+"))
             throw new IllegalArgumentException("Class: up to 40 letters, digits and . & ' ( ) / -, e.g. S3 CS2.");

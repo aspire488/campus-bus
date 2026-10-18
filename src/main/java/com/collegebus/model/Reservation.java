@@ -17,6 +17,8 @@ public class Reservation implements Displayable {
     private LocalDateTime bookedAt;
     private String stop;                   // where the student gets on (to campus) or off (back home); null on older bookings
     private String studentClass;           // e.g. "S3 CS2", for the admin's department filter
+    private String studentRegNo;           // admission number, printed on the pass
+    private String emailStatus;            // the confirmation email (Notifier); null = never tried
 
     public Reservation(int resId, int studentId, String studentName, Bus bus, LocalDate travelDate, int seatNo, String status, LocalDateTime bookedAt) {
         this.resId = resId;
@@ -71,8 +73,23 @@ public class Reservation implements Displayable {
         m.put("date", travelDate.toString()); m.put("status", status); m.put("phase", getPhase());
         m.put("bookedAt", bookedAt == null ? "" : bookedAt.toString().replace('T', ' ').substring(0, 16));
         m.put("bus", bus.toMap()); m.put("stop", stop == null ? "" : stop);
+        m.put("emailStatus", emailStatus == null ? "" : emailStatus);
         return m;
     }
+
+    /** Where the rider gets on: their stop on the way to campus, the campus (first stop of the reversed route) on the way back. */
+    public String boardingPoint() {
+        return bus.isReturnTrip() || stop == null ? bus.getRoute().getSource() : stop;
+    }
+
+    /** Where the rider gets off: the campus in the morning, their stop in the evening. */
+    public String destination() {
+        return !bus.isReturnTrip() || stop == null ? bus.getRoute().getDestination() : stop;
+    }
+
+
+    public void setEmailStatus(String status) { emailStatus = status; }
+    public String getEmailStatus() { return emailStatus; }
 
     public int getResId() { return resId; }
     public void setResId(int resId) { this.resId = resId; }
@@ -86,17 +103,17 @@ public class Reservation implements Displayable {
     public String getStop() { return stop; }
     public String getStudentClass() { return studentClass; }
     public void setStudentClass(String studentClass) { this.studentClass = studentClass; }
+    public String getStudentRegNo() { return studentRegNo; }
+    public void setStudentRegNo(String regNo) { this.studentRegNo = regNo; }
 
     /** As read from the database: kept even if the route was edited after booking. */
     public void setStopAsStored(String stop) { this.stop = stop; }
 
-    /** The student's own stop: on the trip's route, and not the campus end of it. */
+    /** The student's own stop for a new booking: required, on the trip's route, and not the campus end of it. */
     public void setStop(String stop) {
-        if (stop != null) {
-            java.util.List<String> names = bus.getRoute().stopNames();
-            int i = names.indexOf(stop), campus = bus.isReturnTrip() ? 0 : names.size() - 1;
-            if (i < 0 || i == campus) throw new IllegalArgumentException("Choose the stop where you get " + (bus.isReturnTrip() ? "off." : "on."));
-        }
+        java.util.List<String> names = bus.getRoute().stopNames();
+        int i = stop == null ? -1 : names.indexOf(stop), campus = bus.isReturnTrip() ? 0 : names.size() - 1;
+        if (i < 0 || i == campus) throw new IllegalArgumentException("Choose the stop where you get " + (bus.isReturnTrip() ? "off." : "on."));
         this.stop = stop;
     }
 }

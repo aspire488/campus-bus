@@ -7,3 +7,13 @@ db.host=localhost:3306
 db.name=college_bus_db
 db.user=your_mysql_user
 db.password=your_mysql_password
+
+# ---- Optional: booking confirmation email (leave out to switch it off; bookings work either way) ----
+# Email via Gmail: mail.user is the full Gmail address that sends; mail.password is a Google App Password
+# (Google Account > Security > 2-Step Verification > App passwords), never your normal Gmail password.
+# Environment variables work too: CAMPUS_BUS_MAIL_USER, CAMPUS_BUS_MAIL_PASSWORD.
+#mail.user=your.address@gmail.com
+#mail.password=your-16-letter-app-password
+#mail.from=your.address@gmail.com
+#mail.host=smtp.gmail.com
+#mail.port=587

@@ -46,6 +46,17 @@ function Protect-Folder($path) {         # only the current Windows user can rea
     if (Get-ChildItem $path -Force) { & icacls.exe "$path\*" /reset /T /Q | Out-Null }  # files inside inherit exactly that
 }
 
+# MySQL takes paths in the ANSI code page: a user folder whose name is outside it (e.g. non-Latin letters) is given by its
+# 8.3 short name instead, which is plain ASCII. Paths that are already ASCII are used as they are.
+function MySql-Path($folder) {
+    if ($folder -notmatch '[^\x00-\x7F]') { return $folder }
+    try {
+        $short = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($folder).ShortPath
+        if ($short -notmatch '[^\x00-\x7F]') { return $short }
+    } catch { }
+    return $folder
+}
+
 function Test-Port {
     $c = New-Object System.Net.Sockets.TcpClient
     try { $ok = $c.ConnectAsync('127.0.0.1', $Port).Wait(700); return ($ok -and $c.Connected) } catch { return $false } finally { $c.Close() }
@@ -61,7 +72,7 @@ function Start-MySql([string]$extra = '') {
         Fail "Port $Port is used by another program. Close it, or restart Windows, then try again."
     }
     $log = Join-Path $Data 'logs\mysql-start.log'
-    $argLine = "--defaults-file=`"$Ini`" $extra"
+    $argLine = "--defaults-file=`"$(Join-Path (MySql-Path $Data) 'my.ini')`" $extra"
     Start-Process -FilePath $Mysqld -ArgumentList $argLine -WindowStyle Hidden -RedirectStandardError $log | Out-Null
     for ($i = 0; $i -lt 60; $i++) { if (Test-Port) { return $true }; Start-Sleep -Milliseconds 500 }
     Fail "The database server did not start. Details: $log"
@@ -69,8 +80,12 @@ function Start-MySql([string]$extra = '') {
 
 function Stop-MySql {
     $admin = Join-Path $Data 'mysql\bin\mysqladmin.exe'
-    & $admin "--defaults-extra-file=$RootCnf" --host=127.0.0.1 "--port=$Port" shutdown 2>$null | Out-Null
+    # PowerShell 5.1 turns any stderr line of a program into a terminating error under 'Stop': a server that is already
+    # down must not abort the shutdown (or the 'finally' it runs in)
+    $ErrorActionPreference = 'Continue'
+    try { & $admin "--defaults-extra-file=$(Join-Path (MySql-Path $Cfg) 'mysql-root.cnf')" --host=127.0.0.1 "--port=$Port" shutdown 2>&1 | Out-Null } catch { }
     for ($i = 0; $i -lt 40 -and (Test-OurMySql); $i++) { Start-Sleep -Milliseconds 500 }
+    if (Test-OurMySql) { Say "Note: the private database server is still running; it stops when you log off or restart Windows." }
 }
 
 function Read-Settings($file) {
@@ -121,7 +136,10 @@ function Install-MySql {
     if ((Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() -ne $MySqlSha256) { Fail "$zip is damaged or not the expected MySQL $MySqlVersion file. Delete it and run setup again." }
     Say 'Unpacking MySQL (skips debug files) ...'
     Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $target = Join-Path $Data 'mysql'
+    # unpacked into mysql.tmp and renamed only when complete: an interrupted unzip never looks like an installed MySQL
+    $final = Join-Path $Data 'mysql'
+    $target = Join-Path $Data 'mysql.tmp'
+    if (Test-Path $target) { Remove-Item $target -Recurse -Force }
     $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
     try {
         foreach ($e in $archive.Entries) {
@@ -132,35 +150,56 @@ function Install-MySql {
             [System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, $out, $true)
         }
     } finally { $archive.Dispose() }
+    if (Test-Path $final) { Remove-Item $final -Recurse -Force }     # an older half-unpacked folder (no mysqld.exe in it)
+    Rename-Item $target $final
 }
 
 function Initialize-MySql {
     if (Test-Path $DataDir) {
         if (-not (Test-Path $RootCnf)) { Fail "A CAMPUS BUS database exists in $DataDir but its settings are missing. To start over, delete $Data and $Cfg and run setup again." }
-        return
+        if (Test-Path $Settings) { return }                       # finished earlier
+        # no settings file: either an earlier setup stopped before writing it (the demo database has no tables yet: safe to
+        # start over), or someone deleted the file after a finished setup (demo tables exist: never delete them unasked)
+        # anything we can't read, any database besides MySQL's own and the demo, or demo tables all count as data
+        try {
+            $demoDir = Join-Path $DataDir 'campus_bus_demo'
+            $tables = if (Test-Path $demoDir) { @(Get-ChildItem $demoDir -Filter '*.ibd' -ErrorAction Stop) } else { @() }
+            $others = @(Get-ChildItem $DataDir -Directory -ErrorAction Stop | Where-Object { $_.Name -notmatch '^(#.*|mysql|sys|performance_schema|campus_bus_demo)$' })
+        } catch { $tables = @('unreadable') ; $others = @() }
+        if ($tables.Count -gt 0 -or $others.Count -gt 0) {
+            Fail "The database folder $DataDir holds data, but its settings file $Settings is missing. Nothing was deleted. Put the settings file back, or, to start over completely, delete the folders $Data and $Cfg yourself and run setup again."
+        }
+        Say 'An earlier setup did not finish. Starting the database server files again ...'
+        Get-Process mysqld -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $Mysqld } | Stop-Process -Force
+        Start-Sleep -Seconds 1
+        Remove-Item $DataDir -Recurse -Force
+        Remove-Item $RootCnf -Force
     }
+    if (Test-Port) { Fail "Port $Port is used by another program. Close it, or restart Windows, then run setup again." }
     New-Item -ItemType Directory -Force (Join-Path $Data 'logs'), (Join-Path $Data 'private'), $Cfg | Out-Null
     Protect-Folder $Cfg
     Protect-Folder (Join-Path $Data 'private')
     $slash = { param($p) $p -replace '\\', '/' }
-    @(
+    $iniLines = @(
         '[mysqld]',
-        "basedir=`"$(& $slash (Join-Path $Data 'mysql'))`"",
-        "datadir=`"$(& $slash $DataDir)`"",
+        "basedir=`"$(& $slash (Join-Path (MySql-Path $Data) 'mysql'))`"",
+        "datadir=`"$(& $slash (Join-Path (MySql-Path $Data) 'data'))`"",
         "port=$Port",
         'bind-address=127.0.0.1',
         'mysqlx=OFF',
         'performance_schema=OFF',
         'innodb_buffer_pool_size=64M',
-        "log-error=`"$(& $slash (Join-Path $Data 'logs\mysql.err'))`""
-    ) | Set-Content -Path $Ini -Encoding ASCII
+        "log-error=`"$(& $slash (Join-Path (MySql-Path $Data) 'logs\mysql.err'))`""
+    )
+    # MySQL reads my.ini in the Windows ANSI code page (tested: UTF-8 and ASCII both break an accented user name)
+    $iniLines | Set-Content -Path $Ini -Encoding Default
     Say 'Creating the database server files ...'
-    $p = Start-Process -FilePath $Mysqld -ArgumentList "--defaults-file=`"$Ini`" --initialize-insecure" -WindowStyle Hidden -Wait -PassThru
+    $p = Start-Process -FilePath $Mysqld -ArgumentList "--defaults-file=`"$(Join-Path (MySql-Path $Data) 'my.ini')`" --initialize-insecure" -WindowStyle Hidden -Wait -PassThru
     if ($p.ExitCode -ne 0) { Fail "MySQL could not initialise. Details: $(Join-Path $Data 'logs\mysql.err')" }
 
     # the first start sets the root password and creates the app user; we never connect as root without a password
     $rootPw = New-Secret; $appPw = New-Secret
-    $init = Join-Path $Data 'private\init.sql'
+    $init = Join-Path (MySql-Path (Join-Path $Data 'private')) 'init.sql'      # MySQL reads this path too: ASCII-safe like my.ini
     @(
         "ALTER USER 'root'@'localhost' IDENTIFIED BY '$rootPw';",
         'CREATE DATABASE IF NOT EXISTS campus_bus_demo;',
@@ -256,7 +295,7 @@ switch ($Action) {
         }
         $started = Start-MySql
         try {
-            & (Join-Path $Data 'mysql\bin\mysql.exe') "--defaults-extra-file=$RootCnf" --host=127.0.0.1 "--port=$Port" -e 'DROP DATABASE IF EXISTS campus_bus_demo'
+            & (Join-Path $Data 'mysql\bin\mysql.exe') "--defaults-extra-file=$(Join-Path (MySql-Path $Cfg) 'mysql-root.cnf')" --host=127.0.0.1 "--port=$Port" -e 'DROP DATABASE IF EXISTS campus_bus_demo'
             if ($LASTEXITCODE -ne 0) { Fail 'The demo database could not be deleted.' }
             Invoke-DemoSetup
         } finally { if ($started) { Stop-MySql } }

@@ -40,12 +40,19 @@ public abstract class User implements Displayable {
     public boolean checkPassword(String plain) {
         String[] p = passwordHash.split("\\$");
         byte[] expected, actual;
-        if (p.length == 4 && p[0].equals("pbkdf2")) {
-            expected = Base64.getDecoder().decode(p[3]);
-            actual = pbkdf2(plain, Base64.getDecoder().decode(p[2]), Integer.parseInt(p[1]));
-        } else {
-            expected = passwordHash.getBytes(StandardCharsets.US_ASCII);
-            actual = sha256Hex(plain).getBytes(StandardCharsets.US_ASCII);
+        try {
+            if (p.length == 4 && p[0].equals("pbkdf2")) {
+                expected = Base64.getDecoder().decode(p[3]);
+                int iterations = Integer.parseInt(p[1]);
+                if (iterations < 1 || iterations > 10_000_000) return false;   // damaged: never hang a sign-in on it
+                actual = pbkdf2(plain, Base64.getDecoder().decode(p[2]), iterations);
+            } else {
+                pbkdf2(plain, new byte[16], ITERATIONS);       // same cost as a current hash: the time taken does not reveal old accounts
+                expected = passwordHash.getBytes(StandardCharsets.US_ASCII);
+                actual = sha256Hex(plain).getBytes(StandardCharsets.US_ASCII);
+            }
+        } catch (IllegalArgumentException | IllegalStateException damaged) {   // a damaged stored hash never matches (nor crashes sign-in)
+            return false;
         }
         return MessageDigest.isEqual(expected, actual);             // constant-time comparison
     }
@@ -53,7 +60,7 @@ public abstract class User implements Displayable {
     /** True for an old unsalted SHA-256 hash or a PBKDF2 hash with fewer iterations: upgraded at the next successful sign-in. */
     public boolean needsRehash() {
         String[] p = passwordHash.split("\\$");
-        return !(p.length == 4 && p[0].equals("pbkdf2") && Integer.parseInt(p[1]) >= ITERATIONS);
+        return !(p.length == 4 && p[0].equals("pbkdf2") && p[1].matches("\\d{1,9}") && Integer.parseInt(p[1]) >= ITERATIONS);
     }
 
     /** Passwords are never stored as plain text: "pbkdf2$iterations$salt$hash" (PBKDF2-HMAC-SHA256, random 16-byte salt). */

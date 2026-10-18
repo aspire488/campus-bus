@@ -11,3 +11,9 @@ db.properties
 .env
 *credentials*
 backups/
+# private files the app or the Windows scripts can create
+*.cnf
+my.ini
+demo-accounts.txt
+campus-bus-pass-*.pdf
+*.pdf

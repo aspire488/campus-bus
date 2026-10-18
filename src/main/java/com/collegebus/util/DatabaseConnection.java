@@ -83,18 +83,25 @@ public final class DatabaseConnection {
 
     private DatabaseConnection() { }
 
-    static String setting(String key, String fallback) {
+    /** One setting (db.*, mail.*): -D option, then CAMPUS_BUS_* environment variable, then db.properties. */
+    public static String setting(String key, String fallback) {
         String env = System.getenv("CAMPUS_BUS_" + key.replace('.', '_').toUpperCase());
         return System.getProperty(key, env != null ? env : FILE.getProperty(key, fallback));
     }
 
     public static String databaseName() { return setting("db.name", "college_bus_db"); }
 
-    private static Connection open(String database) throws SQLException {
+    private static Connection open(String database) throws SQLException { return open(database, 15000); }
+
+    /** {@code socketTimeoutMs}: a hung server fails after this instead of freezing the app; 0 = wait (setup and upgrades only). */
+    private static Connection open(String database, int socketTimeoutMs) throws SQLException {
         if (!configured()) throw new SQLException(missingSettings(), "08001");
         String user = setting("db.user", null), password = setting("db.password", "");
         checkLogin(user, password);
-        String url = "jdbc:mysql://" + setting("db.host", "localhost:3306") + "/" + database + "?connectTimeout=3000";
+        // a row lock is waited for at most 10 s (InnoDB default: 50 s), so a busy row is reported as "busy" before the 15 s socket
+        // timeout would make it look like a dead server (and the abandoned statement would keep holding its locks)
+        String url = "jdbc:mysql://" + setting("db.host", "localhost:3306") + "/" + database + "?connectTimeout=3000&socketTimeout=" + socketTimeoutMs
+                + "&sessionVariables=innodb_lock_wait_timeout=10";
         return DriverManager.getConnection(url, user, password);
     }
 
@@ -102,11 +109,51 @@ public final class DatabaseConnection {
     public static String explain(Throwable e) {
         if (!configured()) return missingSettings();
         if (e instanceof SQLException s && s.getMessage() != null && s.getMessage().startsWith("Refusing")) return s.getMessage();
-        String state = e instanceof SQLException s && s.getSQLState() != null ? s.getSQLState() : "";
-        if (state.startsWith("28") || state.equals("42000"))
-            return "MySQL refused access. Check db.user, db.password and db.name in db.properties.";
-        return "Can't reach MySQL. Start it, then check db.properties.";
+        if (isAccessProblem(e)) return "MySQL refused access. Check db.user, db.password and db.name in db.properties.";
+        if (isBusy(e)) return "The system is busy right now, so nothing was saved. Please try again in a moment.";
+        if (isConnectionProblem(e)) return "Can't reach MySQL. Start it, then check db.properties.";
+        return "The database refused this change, so nothing was saved. Try again; if it keeps happening, tell the transport office.";
     }
+
+    /** Waited too long for a row another booking or edit holds (1205), or lost a deadlock (1213): nothing was saved; try again. */
+    public static boolean isBusy(Throwable e) {
+        return e instanceof SQLException s && (s.getErrorCode() == 1205 || s.getErrorCode() == 1213);
+    }
+
+    /** Server down, unreachable or timed out (SQLState class 08, or no state at all from the driver). */
+    public static boolean isConnectionProblem(Throwable e) {
+        if (!(e instanceof SQLException s)) return false;
+        String state = s.getSQLState();
+        return state == null || state.startsWith("08") || s instanceof SQLTimeoutException || s instanceof SQLTransientConnectionException;
+    }
+
+    /** Wrong user/password (28000, 1045), no rights on the database (1044) or no such database (1049). */
+    public static boolean isAccessProblem(Throwable e) {
+        if (!(e instanceof SQLException s)) return false;
+        int code = s.getErrorCode();
+        return (s.getSQLState() != null && s.getSQLState().startsWith("28")) || code == 1044 || code == 1045 || code == 1049;
+    }
+
+    /** Runs {@code work} in one transaction on one connection: everything is committed, or nothing (rolled back on any error). */
+    public static <T> T transaction(Work<T> work) throws SQLException {
+        try (Connection c = getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                T result = work.run(c);
+                c.commit();
+                return result;
+            } catch (SQLException | RuntimeException e) {
+                try {
+                    c.rollback();
+                } catch (SQLException rollbackFailed) {                    // keep the real cause; MySQL rolls back on disconnect anyway
+                    e.addSuppressed(rollbackFailed);
+                }
+                throw e;
+            }
+        }
+    }
+
+    public interface Work<T> { T run(Connection c) throws SQLException; }
 
     public static Connection getConnection() throws SQLException {
         return open(databaseName());
@@ -117,16 +164,41 @@ public final class DatabaseConnection {
         try (Connection c = open(""); Statement st = c.createStatement()) {
             st.execute("CREATE DATABASE IF NOT EXISTS `" + databaseName() + "`");
         }
-        try (Connection c = getConnection(); ResultSet rs = c.getMetaData().getTables(databaseName(), null, "reservations", null)) {
+        try (Connection c = open(databaseName(), 0); ResultSet rs = c.getMetaData().getTables(databaseName(), null, "reservations", null)) {
             if (!rs.next()) {
-                boolean demo = Boolean.getBoolean("demo");               // demo rows have public passwords: only on request
+                // schema.sql starts with DROP TABLE: run it only where no table holds a single row (a new database, or a
+                // first run that stopped half-way), never over someone's data
+                String withData = firstTableWithRows(c);
+                if (withData != null)
+                    throw new IllegalStateException("The database " + databaseName() + " holds data (table " + withData + ") but has no reservations table, "
+                        + "so it was not changed. Restore the reservations table from a backup, or point db.name at a new, empty database.");
+                String db = databaseName();                              // demo rows have public passwords: only on request, only demo/test
+                boolean demo = Boolean.getBoolean("demo") && (db.equals("campus_bus_demo") || isDisposable(db));
+                if (Boolean.getBoolean("demo") && !demo)
+                    System.out.println("-Ddemo=true ignored: demo data is loaded only into campus_bus_demo or a *_test database, not " + db + ".");
                 run("/schema.sql");
                 if (demo) run("/demo-data.sql");
                 System.out.println("Created " + databaseName() + (demo ? " with demo data." : " (empty: first-run setup will start)."));
+                upToDate = true;
                 return;
             }
         }
         upgrade();
+        upToDate = true;
+    }
+
+    private static volatile boolean upToDate;
+
+    /** ensureDatabase() once per run: a no-op after it has succeeded (e.g. at start-up), else tried now (MySQL was down at start). */
+    public static void ensureOnce() throws SQLException {
+        if (upToDate) return;
+        try {
+            ensureDatabase();
+        } catch (SQLException | RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new SQLException("The database could not be prepared: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -134,12 +206,17 @@ public final class DatabaseConnection {
      * so a step that failed once is simply tried again on the next launch.
      */
     static void upgrade() throws SQLException {
-        try (Connection c = getConnection(); Statement st = c.createStatement()) {
+        try (Connection c = open(databaseName(), 0); Statement st = c.createStatement()) {   // an ALTER on a big table may take long
+            // but never wait forever for a table another session is using (every other PC would queue behind it):
+            // after 60 s the upgrade fails, nothing is changed, and it is tried again at the next start
+            st.execute("SET SESSION lock_wait_timeout = 60");
             st.execute("CREATE TABLE IF NOT EXISTS settings (name VARCHAR(40) PRIMARY KEY, value VARCHAR(120) NOT NULL)");
             if (!hasColumn(c, "buses", "return_departure")) st.execute("ALTER TABLE buses ADD COLUMN return_departure TIME NULL AFTER arrival");
             if (!hasColumn(c, "reservations", "direction"))
                 st.execute("ALTER TABLE reservations ADD COLUMN direction ENUM('OUT','RETURN') NOT NULL DEFAULT 'OUT' AFTER travel_date");
             if (!hasColumn(c, "reservations", "stop")) st.execute("ALTER TABLE reservations ADD COLUMN stop VARCHAR(40) NULL AFTER seat_no");
+            if (!hasColumn(c, "reservations", "email_status"))                  // the confirmation email, tracked apart from the booking
+                st.execute("ALTER TABLE reservations ADD COLUMN email_status VARCHAR(16) NULL");
             if (!columnType(c, "routes", "stops").equals("varchar(1500)")) st.execute("ALTER TABLE routes MODIFY stops VARCHAR(1500) NOT NULL");
             if (!columnNullable(c, "routes", "distance_km")) st.execute("ALTER TABLE routes MODIFY distance_km DECIMAL(5,1) NULL");
             for (String t : new String[]{"students", "admins"})
@@ -148,18 +225,48 @@ public final class DatabaseConnection {
             if (!seatKey.equals("bus_id,travel_date,direction,seat_no,active"))
                 st.execute("ALTER TABLE reservations " + (seatKey.isEmpty() ? "" : "DROP INDEX uq_seat_per_trip, ")
                         + "ADD UNIQUE KEY uq_seat_per_trip (bus_id, travel_date, direction, seat_no, active)");
-            if (!studentKey.contains("direction")) {
+            String fallback = "student_id,bus_id,travel_date,direction,active";
+            // the real key, tried at each start until it fits - but not rebuilt for nothing while old double bookings still exist
+            boolean oldDoubles = studentKey.equals(fallback) && hasDoubleBookings(st);
+            if (!studentKey.equals("student_id,travel_date,direction,active") && !oldDoubles) {
                 String drop = studentKey.isEmpty() ? "" : "DROP INDEX uq_student_per_trip, ";       // a missing key is simply added
                 try {
                     st.execute("ALTER TABLE reservations " + drop + "ADD UNIQUE KEY uq_student_per_trip (student_id, travel_date, direction, active)");
-                } catch (SQLException duplicates) {
+                } catch (SQLException e) {
+                    if (e.getErrorCode() != 1062) throw e;                              // only "duplicate entry" means old double bookings
                     // old data where one student holds two seats the same day (old return buses were separate buses):
-                    // keep the per-bus key in the database; ReservationService still refuses new double bookings
-                    st.execute("ALTER TABLE reservations " + drop + "ADD UNIQUE KEY uq_student_per_trip (student_id, bus_id, travel_date, direction, active)");
+                    // keep the per-bus key; ReservationService locks the student row, so no new double booking gets in
+                    if (!studentKey.equals(fallback))
+                        st.execute("ALTER TABLE reservations " + drop + "ADD UNIQUE KEY uq_student_per_trip (student_id, bus_id, travel_date, direction, active)");
                 }
             }
         }
     }
+
+    /** True while one student still holds two booked seats in the same direction on the same day (from before v1.0's rule). */
+    private static boolean hasDoubleBookings(Statement st) throws SQLException {
+        try (ResultSet rs = st.executeQuery("SELECT 1 FROM reservations WHERE active IS NOT NULL "
+                + "GROUP BY student_id, travel_date, direction HAVING COUNT(*) > 1 LIMIT 1")) {
+            return rs.next();
+        }
+    }
+
+    /** The name of a table in this database that has at least one row, or null if every table is empty (or there are none). */
+    private static String firstTableWithRows(Connection c) throws SQLException {
+        List<String> tables = new ArrayList<>();
+        try (PreparedStatement ps = c.prepareStatement("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'")) {
+            ps.setString(1, databaseName());
+            try (ResultSet rs = ps.executeQuery()) { while (rs.next()) tables.add(rs.getString(1)); }
+        }
+        for (String t : tables)                                  // names come from the server itself; quoted as identifiers
+            try (Statement st = c.createStatement(); ResultSet rs = st.executeQuery("SELECT 1 FROM `" + t.replace("`", "``") + "` LIMIT 1")) {
+                if (rs.next()) return t;
+            }
+        return null;
+    }
+
+    /** Only a database whose name ends in _test may be wiped and refilled by loadSchema(). */
+    public static boolean isDisposable(String database) { return database != null && database.endsWith("_test"); }
 
     private static String columnType(Connection c, String table, String column) throws SQLException {
         return String.valueOf(column(c, table, column, "COLUMN_TYPE"));
@@ -200,8 +307,10 @@ public final class DatabaseConnection {
         }
     }
 
-    /** Drops and recreates every table, then loads the demo data - for the tests and demos, never a real database. */
+    /** Drops and recreates every table, then loads the demo data - for the tests only, never a real database. */
     public static void loadSchema() throws Exception {
+        if (!isDisposable(databaseName()))
+            throw new IllegalStateException("Refusing to wipe " + databaseName() + ": only a database whose name ends in _test can be reset.");
         run("/schema.sql");
         run("/demo-data.sql");
     }
@@ -212,7 +321,7 @@ public final class DatabaseConnection {
         try (InputStream in = DatabaseConnection.class.getResourceAsStream(file)) {
             sql = new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
-        try (Connection c = getConnection(); Statement st = c.createStatement()) {
+        try (Connection c = open(databaseName(), 0); Statement st = c.createStatement()) {
             for (String part : sql.replaceAll("(?m)^--.*$", "").split(";\\s*\\n")) {
                 String s = part.strip();
                 if (!s.isEmpty() && !s.matches("(?is)(CREATE DATABASE|USE)\\s.*")) st.execute(s);   // target database is chosen above

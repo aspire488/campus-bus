@@ -41,7 +41,8 @@ public class Route implements Displayable {
             if (name.length() > 40) throw new IllegalArgumentException("Stop names can be at most 40 characters.");
             if (!name.matches("[\\p{L}\\d .'()&/-]+"))                  // no < > so Swing never treats a name as HTML
                 throw new IllegalArgumentException("Stop names can use letters, digits, spaces and . ' ( ) & / - (problem: \"" + name + "\").");
-            if (names.contains(name)) throw new IllegalArgumentException(name + " appears twice on the route.");
+            String k = key(name);                                             // "Aluva" and "aluva." are the same stop
+            if (names.stream().anyMatch(x -> key(x).equals(k))) throw new IllegalArgumentException(name + " appears twice on the route.");
             if (names.isEmpty() && (min == null || min != 0)) throw new IllegalArgumentException("The first stop needs a time: minute 0.");
             if (min != null && min < last) throw new IllegalArgumentException("Stop times must not go backwards along the route (" + name + ").");
             if (min != null) last = min;
@@ -112,10 +113,23 @@ public class Route implements Displayable {
 
     /** True if a passenger can board at {@code from} and get off later at {@code to} (blank = any). */
     public boolean serves(String from, String to) {
-        List<String> n = stopNames();
-        int a = from.isBlank() ? 0 : n.indexOf(from), b = to.isBlank() ? n.size() - 1 : n.indexOf(to);
+        int a = from.isBlank() ? 0 : indexOf(from), b = to.isBlank() ? stopNames().size() - 1 : indexOf(to);
         return a >= 0 && b >= 0 && a < b;
     }
+
+    /**
+     * Position of a stop, ignoring case, spaces and punctuation ("Edapally H.S" = "Edapally H S"): printed schedules spell
+     * the same boarding point differently on different buses. -1 if the route does not stop there.
+     */
+    public int indexOf(String stop) {
+        String k = key(stop);
+        List<String> n = stopNames();
+        for (int i = 0; i < n.size(); i++) if (key(n.get(i)).equals(k)) return i;
+        return -1;
+    }
+
+    /** The comparison key used by indexOf: lower case letters and digits only. */
+    public static String key(String stop) { return stop == null ? "" : stop.toLowerCase(java.util.Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]", ""); }
 
     public String getName() { return source + " → " + destination; }
 

@@ -1,5 +1,5 @@
-CAMPUS BUS - bus seat reservation app (Windows 10 / 11, 64-bit)
-=================================================================
+CAMPUS BUS - bus seat reservation app (64-bit Windows 11 tested; Windows 10 not yet verified)
+============================================================================================
 
 Java is included. You do NOT need to install Java or Maven.
 
@@ -16,6 +16,9 @@ FIRST TIME (once per computer, needs internet, about 5 minutes)
 EVERY TIME
   Double-click  run-campus-bus.cmd
   It starts the database, opens CAMPUS BUS, and stops the database when you close the app.
+  Keep its black console window open while you use the app. If you open CAMPUS BUS twice, close the
+  window you opened FIRST last: closing it stops the database for both. If a console window is closed
+  while the app is open, the private database keeps running until you log off.
 
 START THE DEMO AGAIN WITH FRESH DATA
   Double-click  reset-demo.cmd  and type DELETE.
@@ -30,8 +33,10 @@ IF SOMETHING GOES WRONG
   - Windows SmartScreen ("Windows protected your PC") on the .cmd files: click "More info" > "Run anyway"
     (the app itself runs on the signed Java included in this folder).
   - The app says it can't reach the database: close it and start it again with run-campus-bus.cmd.
+  - "MySQL could not initialise" or "did not start" and your Windows user name has non-Latin letters:
+    see Known limitations in README.md (short 8.3 folder names must be switched on).
 
 REMOVE EVERYTHING
   Delete this folder, %LOCALAPPDATA%\CampusBus and %APPDATA%\CampusBus.
 
-Needs: Windows 10 or 11, 64-bit, about 1 GB free disk space, 4 GB RAM or more.
+Needs: 64-bit Windows 11 (Windows 10 not yet verified), about 1 GB free disk space, 4 GB RAM or more.

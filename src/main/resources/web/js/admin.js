@@ -3,7 +3,7 @@ App.adminMenu = { overview: 'Overview', seats: 'Schedules' };
 
 App.pages.overview = function () {
   var res = App.call('overview');
-  if (!res.ok) return;
+  if (!res.ok) return App.problem(res);
   var d = res.data, now = new Date(), hm = pad2(now.getHours()) + ':' + pad2(now.getMinutes());
   var figures = [['Buses running', d.activeBuses, 'of ' + d.totalBuses], ['Seats booked today', d.bookedToday, ''],
     ['Seats open today', d.freeToday, ''], ['Occupancy today', d.occupancy, '%'], ['Cancelled today', d.cancelledToday, ''], ['Students', d.students, '']];

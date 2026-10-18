@@ -1,5 +1,7 @@
 # CAMPUS BUS — final release audit
 
+> **Historical snapshot of 2026-10-11 (before v1.0).** It does not cover the October 2026 changes (Trip + Your stop search, confirmation email and PDF pass, the safety fixes). Current test count and results: README section 14; current limitations: README section 18.
+
 **Status: PASS WITH LIMITATIONS** (2026-10-11) — build and all tests pass, primary student and admin workflows verified in the running app, the real database is intact. Limitations are listed at the end; none is critical.
 
 ## 1. Build and tests

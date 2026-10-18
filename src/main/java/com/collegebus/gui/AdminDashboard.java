@@ -278,10 +278,17 @@ public class AdminDashboard extends Dashboard {
         if (!pick(s)) return;
         FormDialog f = new FormDialog(this, "Edit " + s.getRegNo());
         JTextField name = f.add("Full name", new JTextField(s.getName())), phone = f.add("Phone", new JTextField(s.getPhone()));
+        JTextField email = f.add("Email (confirmations go here)", new JTextField(s.getEmail()));
         JComboBox<String> dept = f.add("Class, e.g. S3 CS2", LoginFrame.departments());
         dept.setSelectedItem(s.getDepartment());
-        if (f.open("Save changes", () -> { admin.requireActive(); s.updateStudent(name.getText(), LoginFrame.typed(dept), phone.getText()); system.students().update(s); }))
-            { toast("Student saved", s.displayStudent(), true); open("Students"); }
+        if (f.open("Save changes", () -> {
+                admin.requireActive();
+                String mail = Student.checkEmail(email.getText());       // checked before anything changes
+                s.updateStudent(name.getText(), LoginFrame.typed(dept), phone.getText());
+                s.setEmail(mail);
+                system.students().updateWithEmail(s); }))
+            toast("Student saved", s.displayStudent(), true);
+        open("Students");                       // reload either way: a failed save must not leave unsaved values in the table
     }
 
     /** Admin only: deletes the account; the database cascades its reservations, so upcoming seats become free again. */

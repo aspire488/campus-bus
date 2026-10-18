@@ -27,7 +27,7 @@ public class Admin extends User {
     public static Admin create(String username, String name, String password) {
         String u = username.trim().toLowerCase(), n = name.trim();
         if (!u.matches("[a-z0-9._-]{3,40}")) throw new IllegalArgumentException("Username needs 3-40 letters, digits or . _ -");
-        if (n.length() < 3 || n.length() > 80 || !n.matches("[\\p{L} .'-]+")) throw new IllegalArgumentException("Name needs 3-80 letters (spaces and . ' - allowed).");
+        if (n.length() < 3 || n.length() > 80 || !n.matches("[\\p{L}\\p{M} .'-]+")) throw new IllegalArgumentException("Name needs 3-80 letters (spaces and . ' - allowed).");
         checkNewPassword(password);
         return new Admin(0, u, n, hash(password));
     }
@@ -74,11 +74,30 @@ public class Admin extends User {
     /** Changes route, first pick-up, evening trip, capacity and status; campus arrival and the evening time follow the timetable. */
     public void updateBus(Bus bus, Route route, LocalTime departure, boolean runsBack, int capacity, String status) throws SQLException {
         requireActive();
-        int returns = !runsBack && bus.getReturnDeparture() != null ? reservationDAO.countUpcomingReturns(bus.getBusId()) : 0;
-        if (returns > 0) throw new IllegalStateException(bus.getBusNo() + " has " + returns + " upcoming return-trip reservations. Keep the return trip or cancel them first.");
-        bus.setBookedSeats(busDAO.highestUpcomingSeat(bus.getBusId()));   // cannot shrink below a booked seat
-        adminDAO.timetable().applyTo(bus, route, departure, runsBack, capacity, status);
-        busDAO.update(bus);
+        Timetable t = adminDAO.timetable();
+        com.collegebus.util.DatabaseConnection.transaction(c -> {
+            // the route as saved now (another admin may have edited it since this form opened), locked before the bus -
+            // the same order saveRoute uses, so two admin edits never deadlock
+            Route current = BusDAO.lockRouteRow(c, route.getRouteId());
+            BusDAO.lock(c, bus.getBusId());          // bookings wait until this change is saved, so the counts below stay true
+            int returns = !runsBack ? reservationDAO.countUpcomingReturns(bus.getBusId()) : 0;
+            if (returns > 0) throw new IllegalStateException(bus.getBusNo() + " has " + returns + " upcoming return-trip reservations. Keep the return trip or cancel them first.");
+            checkStopsKept(busDAO.findById(bus.getBusId(), java.time.LocalDate.now()), current);
+            bus.setBookedSeats(busDAO.highestUpcomingSeat(bus.getBusId()));   // cannot shrink below a booked seat
+            t.applyTo(bus, current, departure, runsBack, capacity, status);
+            busDAO.update(c, bus);
+            return null;
+        });
+    }
+
+    /** Riders booked on this bus must still find their stop on {@code route} (a route edit or a move to another route). */
+    private void checkStopsKept(Bus bus, Route route) throws SQLException {
+        for (String stop : reservationDAO.upcomingStops(bus.getBusId()))
+            // only a stop the bus serves today and the new route drops: bookings at a stop an older version already removed
+            // must not block every later edit (capacity, maintenance, ...) of that bus or route
+            if (bus.getRoute().indexOf(stop) >= 0 && route.indexOf(stop) < 0)   // a spelling-only change (case, dots) keeps the stop
+                throw new IllegalStateException("Students are booked on " + bus.getBusNo() + " at " + stop + ", which is not on the new route. "
+                    + "Keep that stop, or cancel those reservations first.");
     }
 
     /** PPT method: refuses to delete a bus that students are still booked on. */
@@ -100,10 +119,17 @@ public class Admin extends User {
     public void saveRoute(Route route) throws SQLException {
         requireActive();
         Timetable t = adminDAO.timetable();
-        for (Bus b : busDAO.findAll(java.time.LocalDate.now()))   // every bus on it must still work with the new stops - checked before writing
-            if (route.getRouteId() != 0 && b.getRoute().getRouteId() == route.getRouteId())
-                t.applyTo(b, route, b.getDeparture(), b.getReturnDeparture() != null, b.getCapacity(), b.getStatus());
-        busDAO.saveRoute(route);
+        com.collegebus.util.DatabaseConnection.transaction(c -> {
+            if (route.getRouteId() != 0) BusDAO.lockRouteRow(c, route.getRouteId());   // route first, then its buses (as updateBus)
+            BusDAO.lockRoute(c, route.getRouteId());             // its buses: no booking can add a stop between the check and the save
+            for (Bus b : busDAO.findAll(java.time.LocalDate.now()))   // every bus on it must still work with the new stops - checked before writing
+                if (route.getRouteId() != 0 && b.getRoute().getRouteId() == route.getRouteId()) {
+                    checkStopsKept(b, route);
+                    t.applyTo(b, route, b.getDeparture(), b.getReturnDeparture() != null, b.getCapacity(), b.getStatus());
+                }
+            busDAO.saveRoute(c, route);
+            return null;
+        });
         busDAO.retime(t);                        // campus arrival of buses on a route with a printed campus time follows the route
     }
 

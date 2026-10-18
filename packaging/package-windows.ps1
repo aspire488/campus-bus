@@ -30,13 +30,17 @@ Copy-Item 'target\college-bus-reservation-system-1.0.jar', 'target\lib\*.jar' "$
 $modules = 'java.base,java.datatransfer,java.desktop,java.logging,java.management,java.naming,java.net.http,java.prefs,java.scripting,' +
            'java.security.jgss,java.security.sasl,java.sql,java.transaction.xa,java.xml,java.xml.crypto,jdk.accessibility,jdk.crypto.mscapi,' +
            'jdk.jsobject,jdk.localedata,jdk.net,jdk.unsupported,jdk.unsupported.desktop,jdk.xml.dom,jdk.zipfs'
+# JDK 21 keeps the elliptic-curve ciphers (needed for TLS to Gmail) in jdk.crypto.ec; from JDK 22 they are in java.base
+$javaOfJlink = Join-Path (Split-Path $jlink) 'java.exe'
+if ((Test-Path $javaOfJlink) -and (& $javaOfJlink --list-modules | Select-String -Pattern '^jdk\.crypto\.ec@' -Quiet)) { $modules += ',jdk.crypto.ec' }
 & $jlink --add-modules $modules --include-locales 'en,en-IN' --strip-debug --no-header-files --no-man-pages --output "$app\runtime"
 if ($LASTEXITCODE -ne 0) { Write-Host 'jlink failed.'; exit 1 }
 
 Copy-Item setup-windows.cmd, run-campus-bus.cmd, reset-demo.cmd $dist
 Copy-Item scripts\campus-bus.ps1 "$dist\scripts\"
 Copy-Item packaging\README-WINDOWS.txt $dist
-if (Get-ChildItem $dist -Recurse -Include db.properties, *.cnf, demo-accounts.txt) { Write-Host 'A settings file ended up in the release. Stopping.'; exit 1 }
+if (Get-ChildItem $dist -Recurse -Include db.properties, *.cnf, my.ini, demo-accounts.txt, *credentials*, *.pdf, *.sql.bak, *.dump) {
+    Write-Host 'A settings, account or personal file ended up in the release. Stopping.'; exit 1 }
 # standard zip: forward-slash entry names (Windows PowerShell 5 would write backslashes), top folder included
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $zipPath = Join-Path (Resolve-Path 'target\dist').Path "$name.zip"

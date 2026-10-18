@@ -2,6 +2,7 @@ package com.collegebus.service;
 
 import com.collegebus.dao.*;
 import com.collegebus.model.*;
+import com.collegebus.util.DatabaseConnection;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -20,18 +21,27 @@ public class CollegeBusSystem {
     public User login(boolean admin, String login, String password) throws SQLException {
         if (login.isBlank()) throw new IllegalArgumentException(admin ? "Enter your username." : "Enter your email or admission number.");
         if (password.isEmpty()) throw new IllegalArgumentException("Enter your password.");
+        upToDate();
         User user = admin ? adminDAO.find(login) : studentDAO.findByLogin(login);
         if (user == null && admin && needsSetup())
             throw new IllegalArgumentException("No administrator yet. Restart the app to run the first-time setup.");
-        if (user == null) NOBODY.checkPassword(password);                 // same work as a real check: the time taken does not reveal unknown names
-        if (user != null && user.checkPassword(password) && user.needsRehash()) {        // old or cheaper hash: store the current PBKDF2 now
+        // exactly one password check either way: the time taken does not reveal whether the name exists
+        boolean ok = (user == null ? NOBODY : user).checkPassword(password) && user != null;
+        if (!ok) throw new IllegalArgumentException(admin ? "Wrong username or password." : "Wrong email / admission number or password.");
+        if (user.needsRehash()) {                                   // old or cheaper hash: store the current PBKDF2 now
             user.setPasswordHash(User.hash(password));
             if (user instanceof Student) studentDAO.savePassword(user); else adminDAO.savePassword(user);
-            return user;
         }
-        if (user == null || !user.checkPassword(password))
-            throw new IllegalArgumentException(admin ? "Wrong username or password." : "Wrong email / admission number or password.");
         return user;
+    }
+
+    /** The database is brought up to date once per run: at start-up, or at the first sign-in if MySQL was down when the app started. */
+    private static void upToDate() throws SQLException {
+        try {
+            DatabaseConnection.ensureOnce();
+        } catch (IllegalStateException refused) {                  // e.g. data without a reservations table: shown on the login screen
+            throw new IllegalArgumentException(refused.getMessage());
+        }
     }
 
     /** True until the institution has created its first administrator. */
@@ -68,15 +78,28 @@ public class CollegeBusSystem {
 
     public void registerStudent(Student s) throws SQLException { studentDAO.insert(s); }
 
-    /** PPT method: trips (either direction) that serve from -> to, leaving at or after {@code after}, optionally matching (part of) a bus number. */
+    /**
+     * PPT method: trips that serve from -> to, leaving at or after {@code after}, optionally matching (part of) a bus number.
+     * Every trip has the campus at one end: a morning trip (OUT) only ends at the campus and an evening trip (RETURN) only
+     * starts there, so "from a stop to another stop" never matches, and a stop as the destination finds only the trip back.
+     */
     public List<Bus> searchBus(String from, String to, LocalDate date, LocalTime after, String busNo) throws SQLException {
         List<Bus> result = new ArrayList<>();
         String no = busNo.trim().toUpperCase();
         for (Bus b : busDAO.findTrips(date)) {
-            if (b.getRoute().serves(from, to) && !b.timeAt(from).isBefore(after)
+            Route r = b.getRoute();
+            boolean campusEnd = b.isReturnTrip() ? from.isBlank() || r.indexOf(from) == 0
+                                                 : to.isBlank() || r.indexOf(to) == r.stopNames().size() - 1;
+            if (campusEnd && r.serves(from, to) && !b.timeAt(from).isBefore(after)
                     && (no.isEmpty() || b.getBusNo().contains(no))) result.add(b);
         }
         return result;
+    }
+
+    /** The stop name as this trip's route spells it (for a search typed with another spelling); "" if it is not on the route. */
+    public static String stopOn(Bus trip, String stop) {
+        int i = stop == null || stop.isBlank() ? -1 : trip.getRoute().indexOf(stop);
+        return i < 0 ? "" : trip.getRoute().stopNames().get(i);
     }
 
     /** PPT method: gives screens access to booking / cancelling. */
@@ -109,11 +132,19 @@ public class CollegeBusSystem {
         return m;
     }
 
-    /** Every stop name, for the From / To pickers. */
+    /**
+     * Every boarding point once, for the "Your stop" picker: the campus (each route's last stop) is not a choice, and
+     * spellings of the same stop that differ only in case, spaces or dots are listed once.
+     */
     public List<String> allStops() throws SQLException {
-        TreeSet<String> stops = new TreeSet<>();
-        for (Route r : busDAO.findRoutes()) stops.addAll(r.stopNames());
-        return new ArrayList<>(stops);
+        Map<String, String> byKey = new TreeMap<>();
+        for (Route r : busDAO.findRoutes()) {                    // a stop someone can board at on some route; never a route's own campus end
+            List<String> stops = r.stopNames();
+            for (String s : stops.subList(0, stops.size() - 1)) byKey.putIfAbsent(Route.key(s), s);
+        }
+        List<String> list = new ArrayList<>(byKey.values());
+        list.sort(String.CASE_INSENSITIVE_ORDER);
+        return list;
     }
 
     public StudentDAO students() { return studentDAO; }

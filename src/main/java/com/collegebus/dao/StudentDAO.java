@@ -62,9 +62,25 @@ public class StudentDAO {
         Queries.update("UPDATE students SET password=? WHERE student_id=?", s.getPasswordHash(), s.getId());
     }
 
+    /**
+     * Name, class and phone (the student's own profile page). The email is left as it is in the database, so a student
+     * who stayed signed in never undoes an address the transport office corrected meanwhile.
+     */
     public void update(Student s) throws SQLException {
-        Queries.update("UPDATE students SET name=?, department=?, phone=? WHERE student_id=?",
-                s.getName(), s.getDepartment(), s.getPhone(), s.getId());
+        if (Queries.update("UPDATE students SET name=?, department=?, phone=? WHERE student_id=?",
+                s.getName(), s.getDepartment(), s.getPhone(), s.getId()) == 0)
+            throw new IllegalArgumentException("That student no longer exists.");
+    }
+
+    /** Admin edit: name, class, phone and email together; the id, admission number, password and reservations stay as they are. */
+    public void updateWithEmail(Student s) throws SQLException {
+        try {
+            if (Queries.update("UPDATE students SET name=?, department=?, phone=?, email=? WHERE student_id=?",
+                    s.getName(), s.getDepartment(), s.getPhone(), s.getEmail(), s.getId()) == 0)
+                throw new IllegalArgumentException("That student no longer exists.");
+        } catch (SQLIntegrityConstraintViolationException e) {
+            throw new IllegalArgumentException("Another student already uses " + s.getEmail() + ".");
+        }
     }
 
     /** Removes the account; ON DELETE CASCADE removes its reservations, which frees any booked seats. */

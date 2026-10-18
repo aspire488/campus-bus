@@ -11,8 +11,8 @@ import java.util.List;
 /** All SQL for reservations: insert, cancel, look-ups and seat availability. */
 public class ReservationDAO {
     // reservations and buses both have a "status" column, so the reservation's one is renamed res_status
-    private static final String SELECT = "SELECT x.res_id, x.student_id, x.travel_date, x.direction, x.seat_no, x.stop, x.status AS res_status, x.booked_at, "
-            + "s.name AS student_name, s.department AS student_class, b.*, r.source, r.destination, r.stops, r.distance_km, 0 AS booked, 0 AS booked_return, "
+    private static final String SELECT = "SELECT x.res_id, x.student_id, x.travel_date, x.direction, x.seat_no, x.stop, x.status AS res_status, x.booked_at, x.email_status, "
+            + "s.name AS student_name, s.department AS student_class, s.reg_no AS student_reg, b.*, r.source, r.destination, r.stops, r.distance_km, 0 AS booked, 0 AS booked_return, "
             + "COALESCE((SELECT value FROM settings WHERE name = 'evening_departure'), '16:30') AS evening "
             + "FROM reservations x JOIN students s ON s.student_id = x.student_id "
             + "JOIN buses b ON b.bus_id = x.bus_id JOIN routes r ON r.route_id = b.route_id ";
@@ -34,6 +34,8 @@ public class ReservationDAO {
                             rs.getString("res_status"), bookedAt == null ? null : bookedAt.toLocalDateTime());
                     r.setStopAsStored(rs.getString("stop"));
                     r.setStudentClass(rs.getString("student_class"));
+                    r.setStudentRegNo(rs.getString("student_reg"));
+                    r.setEmailStatus(rs.getString("email_status"));
                     list.add(r);
                 }
             }
@@ -41,11 +43,10 @@ public class ReservationDAO {
         return list;
     }
 
-    /** Inserts a booked reservation and stores the generated id back into the object. */
-    public void insert(Reservation r) throws SQLException {
+    /** Inserts a booked reservation on {@code c} (inside the booking's transaction) and stores the generated id back into the object. */
+    public void insert(Connection c, Reservation r) throws SQLException {
         String sql = "INSERT INTO reservations (student_id, bus_id, travel_date, direction, seat_no, stop, status) VALUES (?,?,?,?,?,?,'BOOKED')";
-        try (Connection c = DatabaseConnection.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, r.getStudentId());
             ps.setInt(2, r.getBus().getBusId());
             ps.setDate(3, Date.valueOf(r.getTravelDate()));
@@ -103,6 +104,25 @@ public class ReservationDAO {
         List<Object[]> rows = Queries.rows("SELECT x.seat_no, x.bus_id, b.bus_no FROM reservations x JOIN buses b ON b.bus_id = x.bus_id "
                 + "WHERE x.student_id=? AND x.travel_date=? AND x.direction=? AND x.status='BOOKED'", studentId, Date.valueOf(date), direction);
         return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /** Stores the confirmation email's result (Notifier). */
+    public void setEmailStatus(int resId, String status) throws SQLException {
+        Queries.update("UPDATE reservations SET email_status = ? WHERE res_id = ?", status, resId);
+    }
+
+    /** The stops riders on this bus are booked at for trips that have not happened yet (an edit must keep them on the route). */
+    public List<String> upcomingStops(int busId) throws SQLException {
+        List<String> stops = new ArrayList<>();
+        for (Object[] row : Queries.rows("SELECT DISTINCT stop FROM reservations WHERE bus_id=? AND status='BOOKED' AND stop IS NOT NULL "
+                + "AND travel_date >= CURDATE()", busId))
+            stops.add((String) row[0]);
+        return stops;
+    }
+
+    /** All BOOKED rows of a bus, past ones included: the travel history a delete would erase. */
+    public int countBooked(int busId) throws SQLException {
+        return Queries.intValue("SELECT COUNT(*) FROM reservations WHERE bus_id=? AND status='BOOKED'", busId);
     }
 
     public int countUpcomingReturns(int busId) throws SQLException {

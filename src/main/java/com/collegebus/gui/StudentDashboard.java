@@ -38,16 +38,17 @@ public class StudentDashboard extends Dashboard {
         JLabel error = Theme.label(" ", Theme.semi(13), Theme.SIGNAL);
         JButton save = Theme.button("Save changes", true);
         save.addActionListener(e -> {
+            String oldName = student.getName(), oldClass = student.getDepartment(), oldPhone = student.getPhone();
             try {
                 student.updateStudent(name.getText(), LoginFrame.typed(dept), phone.getText());
                 system.students().update(student);
                 error.setText(" ");
                 repaint();                                    // the menu shows the (possibly new) name
                 toast("Profile saved", "Your details are up to date.", true);
-            } catch (IllegalArgumentException ex) {
-                error.setText(ex.getMessage());
             } catch (Exception ex) {
-                error.setText("Can't reach the database. Check that MySQL is running.");
+                if (!student.getName().equals(oldName) || !student.getPhone().equals(oldPhone) || !student.getDepartment().equals(oldClass))
+                    student.updateStudent(oldName, oldClass, oldPhone);       // not saved: never show unsaved values as the profile
+                error.setText(ex instanceof java.sql.SQLException s ? com.collegebus.util.DatabaseConnection.explain(s) : ex.getMessage());
             }
         });
         JPanel grid = new JPanel(new GridLayout(0, 2, 40, 6));

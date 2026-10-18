@@ -78,6 +78,12 @@ public abstract class Dashboard extends JFrame {
         SwingUtilities.invokeLater(() -> Toast.show(getRootPane(), title, message, ok));
     }
 
+    /** Closing the window also stops its web pages (see WebPanel.close). */
+    @Override public void dispose() {
+        for (JComponent page : pages.values()) if (page instanceof WebPanel web) web.close();
+        super.dispose();
+    }
+
     private void logout() {
         dispose();
         new LoginFrame(system).setVisible(true);

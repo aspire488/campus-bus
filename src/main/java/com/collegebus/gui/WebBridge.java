@@ -2,9 +2,14 @@ package com.collegebus.gui;
 
 import com.collegebus.model.*;
 import com.collegebus.service.CollegeBusSystem;
+import com.collegebus.service.Notifier;
+import com.collegebus.service.PassImage;
+import com.collegebus.service.PassPdf;
 import com.collegebus.service.ReservationService;
+import com.collegebus.util.DatabaseConnection;
 import com.collegebus.util.Json;
 import java.sql.SQLException;
+import java.time.format.DateTimeParseException;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.*;
@@ -21,6 +26,7 @@ public class WebBridge {
     private final ReservationService reservations;
     private final String institution;
     private WebPanel web;
+    private static final Notifier NOTIFIER = Notifier.fromSettings();     // one background sender for the whole app
 
     public WebBridge(Dashboard dashboard, CollegeBusSystem system, User user) {
         this.dashboard = dashboard;
@@ -42,9 +48,20 @@ public class WebBridge {
         try {
             return "{\"ok\":true,\"data\":" + Json.of(work.call()) + "}";       // fixed order: "ok" always first
         } catch (SQLException e) {
-            return "{\"ok\":false,\"db\":true,\"error\":" + Json.of("Can't reach the database. Check that MySQL is running.") + "}";
-        } catch (Exception e) {
+            // state and code only: a MySQL message can quote the data (e.g. an email in "Duplicate entry ...")
+            System.out.println("Database error " + e.getSQLState() + "/" + e.getErrorCode() + " (" + e.getClass().getSimpleName() + ")");
+            if (DatabaseConnection.isConnectionProblem(e))
+                return "{\"ok\":false,\"db\":true,\"error\":" + Json.of("Can't reach the database. Check that MySQL is running.") + "}";
+            return "{\"ok\":false,\"error\":" + Json.of(DatabaseConnection.explain(e)) + "}";
+        } catch (NumberFormatException | DateTimeParseException e) {          // a malformed id or date from the page
+            System.out.println("Bad request from the page: " + e.getClass().getSimpleName());
+            return "{\"ok\":false,\"error\":" + Json.of("That request was not valid. Go back and try again.") + "}";
+        } catch (IllegalArgumentException | IllegalStateException e) {        // a booking rule: its message is written for the user
             return "{\"ok\":false,\"error\":" + Json.of(String.valueOf(e.getMessage())) + "}";
+        } catch (Exception e) {                                                 // a bug: never shown raw, always logged with its trace
+            System.out.println("Unexpected error in a page request: " + e.getClass().getSimpleName());
+            e.printStackTrace();
+            return "{\"ok\":false,\"error\":" + Json.of("Something went wrong, so nothing was changed. Please try again.") + "}";
         }
     }
 
@@ -71,13 +88,9 @@ public class WebBridge {
         });
     }
 
+    /** The pass page's data - the same function the PDF pass is drawn from (PassImage), so screen and PDF always agree. */
     private Map<String, Object> withStops(Reservation r) throws SQLException {
-        Map<String, Object> m = r.toMap();
-        m.put("stops", r.getBus().stopTimes());
-        m.put("live", r.getBus().estimatePosition(r.getTravelDate(), java.time.LocalDateTime.now()));
-        m.put("institution", institution);
-        m.put("window", window());
-        return m;
+        return PassImage.data(r, institution, window());
     }
 
     /** "08:20–08:40": the campus arrival window, shown next to targets so nobody reads them as printed times. */
@@ -86,8 +99,20 @@ public class WebBridge {
         return t.getArriveFrom() + "–" + t.getArriveBy();
     }
 
-    public String search(String from, String to, String date, String after, String busNo) {
-        return reply(() -> system.searchBus(from, to, LocalDate.parse(date), after.isBlank() ? LocalTime.MIN : LocalTime.parse(after), busNo));
+    /** Trips for one stop: "OUT" = from that stop to campus, "RETURN" = from campus to that stop (blank stop = every trip that way). */
+    public String search(String direction, String stop, String date, String after, String busNo) {
+        return reply(() -> {
+            if (!direction.equals("OUT") && !direction.equals("RETURN")) throw new IllegalArgumentException("Choose to campus or from campus.");
+            boolean out = direction.equals("OUT");
+            List<Map<String, Object>> list = new ArrayList<>();
+            for (Bus b : system.searchBus(out ? stop : "", out ? "" : stop, LocalDate.parse(date), after.isBlank() ? LocalTime.MIN : LocalTime.parse(after), busNo)) {
+                if (b.isReturnTrip() == out) continue;           // a blank stop matches both ways: keep the chosen direction only
+                Map<String, Object> m = new LinkedHashMap<>(b.toMap());
+                m.put("match", CollegeBusSystem.stopOn(b, stop));  // the stop as this route spells it
+                list.add(m);
+            }
+            return list;
+        });
     }
 
     /** Seat map data for one trip ("OUT" or "RETURN"): the bus, its route with stop times, taken seats and this student's seat. */
@@ -117,11 +142,60 @@ public class WebBridge {
     }
 
     public String book(String busId, String date, String direction, String seat, String stop) {
-        String json = reply(() -> withStops(reservations.bookSeat(student(), Integer.parseInt(busId), LocalDate.parse(date), direction,
-                Integer.parseInt(seat), stop.isBlank() ? null : stop)));
-        boolean ok = json.startsWith("{\"ok\":true");
+        int[] booked = {0};
+        String json = reply(() -> {
+            Reservation r = reservations.bookSeat(student(), Integer.parseInt(busId), LocalDate.parse(date), direction,
+                    Integer.parseInt(seat), stop.isBlank() ? null : stop);
+            booked[0] = r.getResId();
+            try {
+                return withStops(r);
+            } catch (Exception afterCommit) {          // the seat IS booked: never report it as a failure
+                return r.toMap();
+            }
+        });
+        boolean ok = booked[0] > 0;                    // committed: only now may a confirmation go out (on its own thread)
+        if (ok) NOTIFIER.bookingConfirmed((Student) user, booked[0], institution);
         dashboard.toast(ok ? "Reservation confirmed" : "Seat not booked", ok ? "Seat " + seat + " is yours." : "See the message on the seat map.", ok);
         return json;
+    }
+
+    /** Sends the confirmation again after a failed attempt (the booking itself is untouched). */
+    public String resend(String resId) {
+        return reply(() -> {
+            Reservation r = reservations.find(student(), Integer.parseInt(resId));
+            if (!"BOOKED".equals(r.getStatus())) throw new IllegalStateException("This reservation is cancelled.");
+            if (r.hasDeparted()) throw new IllegalStateException("This bus has already left, so no confirmation is sent.");
+            NOTIFIER.bookingConfirmed((Student) user, r.getResId(), institution);
+            return "queued";
+        });
+    }
+
+    /** Saves the pass as a PDF wherever the student chooses - works without any mail provider. */
+    public String savePass(String resId) {
+        return reply(() -> {
+            Reservation r = reservations.find(student(), Integer.parseInt(resId));
+            javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();      // bridge calls run on the JavaFX thread
+            chooser.setInitialFileName("campus-bus-pass-" + r.getCode() + ".pdf");
+            chooser.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("PDF", "*.pdf"));
+            java.io.File file = chooser.showSaveDialog(null);
+            if (file == null) return "";
+            // the pass picture is drawn on this (JavaFX) thread, so the PDF is made in the background and the toast reports the result
+            Student me = student();
+            Thread save = new Thread(() -> {
+                try {
+                    // read again: the booking may have been cancelled while the save dialog was open
+                    Reservation now = reservations.find(me, r.getResId());
+                    java.nio.file.Files.write(file.toPath(), PassPdf.create(now, institution));
+                    dashboard.toast("Pass saved", file.getName(), true);
+                } catch (Exception e) {
+                    System.out.println("Pass not saved: " + e.getClass().getSimpleName());
+                    dashboard.toast("Pass not saved", "Try again, or print the pass instead.", false);
+                }
+            }, "save-pass");
+            save.setDaemon(true);
+            save.start();
+            return file.getName();
+        });
     }
 
     public String cancel(String resId) {

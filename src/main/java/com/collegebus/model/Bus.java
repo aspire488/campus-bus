@@ -134,7 +134,7 @@ public class Bus implements Displayable {
 
     /** When this trip reaches {@code stop} (blank = when it leaves the first stop): the published time, or the estimate if none is published. */
     public LocalTime timeAt(String stop) {
-        int i = stop == null || stop.isBlank() ? 0 : getRoute().stopNames().indexOf(stop);
+        int i = stop == null || stop.isBlank() ? 0 : getRoute().indexOf(stop);
         return getDeparture().plusMinutes(minutes().get(Math.max(i, 0)));
     }
 

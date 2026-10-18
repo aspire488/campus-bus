@@ -1,15 +1,30 @@
 /* Student pages: home, search, seat map, travel pass, my reservations. All data comes from Java (WebBridge). */
 App.menu = { home: 'Home', search: 'Find a bus', seats: 'Find a bus', trips: 'My reservations', pass: 'My reservations', overview: 'Overview' };
-App.q = { from: '', to: '', date: isoDate(0), after: '', busNo: '', sort: 'time' };
+/* Every trip has the campus at one end: dir 'OUT' = from your stop to campus (morning), 'RETURN' = from campus to your stop. */
+App.q = { dir: 'OUT', stop: '', date: isoDate(0), after: '', busNo: '', sort: 'time' };
 
 function stopOptions(stops, value, any) {
+  if (value && stops.indexOf(value) < 0) { value = ''; App.q.stop = ''; }     // a stop no longer offered: never filter by it unseen
   return '<option value="">' + any + '</option>' + stops.map(function (s) {
-    return '<option' + (s === value ? ' selected' : '') + '>' + esc(s) + '</option>';
+    return '<option value="' + esc(s) + '"' + (s === value ? ' selected' : '') + '>' + esc(s) + '</option>';
   }).join('');
+}
+
+function dirOptions(dir) {
+  return [['OUT', 'To campus'], ['RETURN', 'From campus']].map(function (d) {
+    return '<option value="' + d[0] + '"' + (d[0] === dir ? ' selected' : '') + '>' + d[1] + '</option>';
+  }).join('');
+}
+
+/* "from Vytilla to campus" / "from campus to Vytilla" - plain text: callers escape it (or use textContent). */
+function journey(dir, stop) {
+  var s = stop || 'any stop';
+  return dir === 'RETURN' ? 'from campus to ' + s : 'from ' + s + ' to campus';
 }
 
 function dayOptions(chosen) {
   var out = '';
+  if (App.q.date < isoDate(0)) App.q.date = isoDate(0);                  // the window stayed open past midnight
   chosen = chosen || App.q.date;
   for (var i = 0; i < 8; i++) {
     var iso = isoDate(i), f = fmtDate(iso);
@@ -19,7 +34,7 @@ function dayOptions(chosen) {
 }
 
 function readSearch() {
-  ['from', 'to', 'date', 'after', 'busNo', 'sort'].forEach(function (k) {
+  ['dir', 'stop', 'date', 'after', 'busNo', 'sort'].forEach(function (k) {
     var el = document.getElementById('q-' + k);
     if (el) App.q[k] = el.value;
   });
@@ -28,14 +43,16 @@ function readSearch() {
 /* ---------- Home ---------- */
 App.pages.home = function () {
   var res = App.call('home');
-  if (!res.ok) return;
-  var d = res.data, hour = new Date().getHours(), stops = App.call('stops').data;
+  if (!res.ok) return App.problem(res);
+  var all = App.call('stops');
+  if (!all.ok) return App.problem(all);
+  var d = res.data, hour = new Date().getHours(), stops = all.data;
   var hello = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   App.render(
     '<header class="page-head"><h1>' + hello + ', ' + esc(d.me.firstName) + '</h1><p class="lead">Where do you need to go?</p></header>' +
     '<form class="search-strip" onsubmit="readSearch(); App.go(\'search\'); return false;">' +
-      '<label>From<select id="q-from">' + stopOptions(stops, App.q.from, 'Any stop') + '</select></label>' +
-      '<label>To<select id="q-to">' + stopOptions(stops, App.q.to, 'Any stop') + '</select></label>' +
+      '<label>Trip<select id="q-dir">' + dirOptions(App.q.dir) + '</select></label>' +
+      '<label>Your stop<select id="q-stop">' + stopOptions(stops, App.q.stop, 'Any stop') + '</select></label>' +
       '<label>Date<select id="q-date">' + dayOptions() + '</select></label>' +
       '<button class="btn primary">Find a bus</button></form>' +
     '<div class="home-grid"><section class="next">' + nextTrip(d.next) + '</section>' +
@@ -64,13 +81,13 @@ function nextTrip(r) {
 /* ---------- Find a bus ---------- */
 App.pages.search = function () {
   var stops = App.call('stops');
-  if (!stops.ok) return;
+  if (!stops.ok) return App.problem(stops);
   var times = ['', '07:00', '08:00', '09:00', '12:00', '16:00'];
   App.render('<header class="page-head"><h1>Find a bus</h1><p class="lead" id="count"></p></header>' +
     '<form class="filters" onchange="readSearch(); showResults();" onsubmit="return false;">' +
-      '<label>From<select id="q-from">' + stopOptions(stops.data, App.q.from, 'Any stop') + '</select></label>' +
-      '<button type="button" class="swap" title="Swap From and To (return trip)" onclick="swapStops()">⇄</button>' +
-      '<label>To<select id="q-to">' + stopOptions(stops.data, App.q.to, 'Any stop') + '</select></label>' +
+      '<label>Trip<select id="q-dir">' + dirOptions(App.q.dir) + '</select></label>' +
+      '<button type="button" class="swap" title="Switch between the trip to campus and the trip back" onclick="swapStops()">⇄</button>' +
+      '<label>Your stop<select id="q-stop">' + stopOptions(stops.data, App.q.stop, 'Any stop') + '</select></label>' +
       '<label>Date<select id="q-date">' + dayOptions() + '</select></label>' +
       '<label>Leaving after<select id="q-after">' + times.map(function (t) {
         return '<option value="' + t + '"' + (t === App.q.after ? ' selected' : '') + '>' + (t || 'Any time') + '</option>'; }).join('') + '</select></label>' +
@@ -84,17 +101,13 @@ App.pages.search = function () {
 /* The same bus drives its route both ways; the trip back is labelled so the two are never confused. */
 function tripTag(b) { return b.direction === 'RETURN' ? ' <span class="trip-tag">Return trip</span>' : ''; }
 
-/* Return trip in one click: home -> campus becomes campus -> home. */
+/* Return trip in one click: your stop -> campus becomes campus -> your stop (the stop stays the same). */
 function swapStops() {
   readSearch();
-  var from = App.q.from;
-  App.q.from = App.q.to;
-  App.q.to = from;
+  App.q.dir = App.q.dir === 'RETURN' ? 'OUT' : 'RETURN';
   App.pages.search();
 }
 
-/* Every stop has a fixed daily time; this is the bus's time at one stop ('' = its first stop / last stop). */
-function timeAt(b, stop, last) { return stopAt(b, stop, last).time; }
 
 /* The stop itself (name, time, kind: published / estimated / target). */
 function stopAt(b, stop, last) {
@@ -109,31 +122,41 @@ function minutesBetween(a, b) {
   return (+b.slice(0, 2) * 60 + +b.slice(3)) - (+a.slice(0, 2) * 60 + +a.slice(3));
 }
 
+/* Where this trip picks the rider up and drops them: the searched stop at one end, the campus at the other. */
+function ends(b) {
+  var out = b.direction === 'OUT';
+  return { on: stopAt(b, out ? b.match : ''), off: stopAt(b, out ? '' : b.match, true) };
+}
+
 function showResults() {
-  var res = App.call('search', App.q.from, App.q.to, App.q.date, App.q.after, App.q.busNo.trim());
-  if (!res.ok) return;
+  var res = App.call('search', App.q.dir, App.q.stop, App.q.date, App.q.after, App.q.busNo.trim());
+  if (!res.ok) { if (!res.db) document.getElementById('results').innerHTML = App.empty('Something went wrong', res.error); return; }
   var buses = res.data, now = new Date(), today = App.q.date === isoDate(0);
   var nowHm = pad2(now.getHours()) + ':' + pad2(now.getMinutes());
   buses.sort(function (a, b) {
-    var ta = timeAt(a, App.q.from), tb = timeAt(b, App.q.from);
+    var ta = ends(a).on.time, tb = ends(b).on.time;
     return App.q.sort === 'free' ? b.available - a.available : App.q.sort === 'quick' ? a.duration - b.duration : ta < tb ? -1 : ta > tb ? 1 : 0;
   });
-  document.getElementById('count').textContent = buses.length + (buses.length === 1 ? ' trip' : ' trips') + ' for ' + fmtDate(App.q.date).long;
+  document.getElementById('count').textContent = buses.length + (buses.length === 1 ? ' trip ' : ' trips ') + journey(App.q.dir, App.q.stop) + ', ' + fmtDate(App.q.date).long;
   document.getElementById('results').innerHTML = buses.length ? buses.map(function (b) {
-    var on = stopAt(b, App.q.from), off2 = stopAt(b, App.q.to, true), board = on.time, alight = off2.time, where = App.q.from || b.source;
+    var e = ends(b), on = e.on, off2 = e.off, board = on.time, alight = off2.time, where = on.name;
     var approx = on.kind !== 'published' || off2.kind !== 'published' ? '≈ ' : '';
-    var gone = today && board <= nowHm, off = b.status !== 'ACTIVE', full = b.available === 0;
-    var action = off ? '<span class="tag amber">Not running</span>' : gone ? '<span class="tag">Left ' + esc(where) + ' at ' + board + '</span>' :
-      full ? '<span class="tag red">Full</span>' : '<button class="btn" onclick="App.go(\'seats\', {id: ' + b.id + ', dir: \'' + b.direction + '\', date: \'' + App.q.date + '\'})">View seats</button>';
+    // bookable until the bus leaves its first stop (the same rule the booking itself checks)
+    var gone = today && b.departure <= nowHm, off = b.status !== 'ACTIVE', full = b.available === 0;
+    var action = off ? '<span class="tag amber">Not running</span>' : gone ? '<span class="tag">Left ' + esc(b.source) + ' at ' + b.departure + '</span>' :
+      full ? '<span class="tag red">Full</span>' : '<button class="btn" onclick="App.go(\'seats\', {id: ' + b.id + ', dir: \'' + b.direction + '\', date: \'' + App.q.date +
+        '\', stop: ' + esc(JSON.stringify(b.match)) + '})">View seats</button>';
     return '<article class="bus-row' + (gone || off ? ' dim' : '') + '"><div class="dep' + (on.kind !== 'published' ? ' est' : '') + '">' + (on.kind === 'published' ? '' : '<i class="approx">≈</i>') + on.time + '<small>at ' + esc(where) + '</small></div>' +
-      '<div class="info"><span class="busno">' + b.busNo + '</span> <b>' + esc(b.route) + '</b>' + tripTag(b) +
+      '<div class="info"><span class="busno">' + esc(b.busNo) + '</span> <b>' + esc(b.route) + '</b>' + tripTag(b) +
       '<small>via ' + esc(b.stops.slice(1, -1).join(', ')) + '</small></div>' +
       '<div class="mini"><span>' + App.when(on) + '</span><i></i><span>' + App.when(off2) + '</span><small>' + approx + minutesBetween(board, alight) + ' min to ' +
-        esc(App.q.to || b.destination) + '</small></div>' +
+        esc(off2.name) + '</small></div>' +
       '<div class="free"><b>' + b.available + '</b> of ' + b.capacity + ' free<div class="bar"><i style="width:' + b.occupancy + '%"></i></div></div>' +
       '<div class="act">' + action + '</div></article>';
-  }).join('') : App.empty('No buses match', 'Try another stop, an earlier time or a different date.',
-    '<button class="btn" onclick="App.q = {from:\'\', to:\'\', date: isoDate(0), after:\'\', busNo:\'\', sort:\'time\'}; App.go(\'search\')">Clear filters</button>');
+  }).join('') : App.empty('No bus ' + journey(App.q.dir, App.q.stop),
+    App.q.stop ? 'No bus serves this stop ' + (App.q.dir === 'RETURN' ? 'on the way back' : 'on the way to campus') +
+      ' with these filters. Try the other direction, another date or "Any time".' : 'Try another date or "Any time".',
+    '<button class="btn" onclick="App.q = {dir: App.q.dir, stop: \'\', date: isoDate(0), after: \'\', busNo: \'\', sort: \'time\'}; App.go(\'search\')">Clear filters</button>');
 }
 
 /* ---------- Seat map ---------- */
@@ -142,7 +165,8 @@ App.pages.seats = function (p) {
   if (!res.ok) return res.db || App.render(App.empty('Bus not found', res.error));
   var b = App.bus = res.data;
   App.seat = 0;
-  App.stop = App.stop && b.stops.some(function (s) { return s.name === App.stop; }) ? App.stop : '';
+  // the stop to preselect comes with the page (the searched stop as this route spells it), never left over from another bus
+  App.stop = p.stop && b.stops.some(function (s) { return s.name === p.stop; }) ? p.stop : '';
   var admin = App.role === 'admin', booked = b.taken.length, vacant = b.status === 'ACTIVE' ? b.capacity - booked : 0;
   App.render((admin ? '<a class="back" onclick="app.openMenu(\'Schedules\')">← Schedules</a>' : '<a class="back" onclick="App.go(\'search\')">← All buses</a>') +
     '<header class="bus-head"><div><span class="busno big">' + b.busNo + '</span>' + tripTag(b) + '<h1>' + esc(b.route) + '</h1>' +
@@ -153,7 +177,7 @@ App.pages.seats = function (p) {
     '<div><b>' + b.capacity + '</b><small>seats</small></div></div></header>' +
     '<ul class="legend"><li><i class="seat s-free"></i>Available</li>' + (admin ? '' : '<li><i class="seat s-sel"></i>Selected</li>') +
     '<li><i class="seat s-taken"></i>Booked</li><li><i class="seat s-off"></i>Unavailable</li>' + (b.mine ? '<li><i class="seat s-mine"></i>Yours</li>' : '') + '</ul>' +
-    '<section class="strip">' + App.routeLine(b.stops, { labels: true, width: App.fit(1000), mark: onRoute(b, App.q.from) }) +
+    '<section class="strip">' + App.routeLine(b.stops, { labels: true, width: App.fit(1000), mark: App.stop }) +
       (b.stops.some(function (s) { return s.kind !== 'published'; }) ? App.timeKey : '') + '</section>' +
     '<div class="seat-layout"><div class="bus-body"><div class="cab"><span class="wheel"></span>Driver<span class="door">Door</span></div>' +
     '<div class="seat-grid">' + seatGrid(b) + '</div></div><aside class="summary" id="summary"></aside></div>');
@@ -195,10 +219,11 @@ function pickSeat(n) {
 function summary(error) {
   var b = App.bus, n = App.seat, lane = (n - 1) % 4, html;
   if (App.role === 'admin') html = '<h2>Passengers</h2><p>' + b.taken.length + ' of ' + b.capacity + ' seats booked.</p>' +
-    (b.passengers.length ? '<ol class="manifest">' + b.passengers.map(function (p) {
+    ((b.passengers || []).length ? '<ol class="manifest">' + b.passengers.map(function (p) {
       return '<li><b>' + pad2(p.seat) + '</b>' + esc(p.name) + '<small>' + esc(p.regNo) + (p.stop ? ' · ' + esc(p.stop) : '') + '</small></li>'; }).join('') + '</ol>'
       : '<p class="muted">Nobody has booked this trip yet.</p>');
-  else if (b.mine) html = '<h2>You have seat ' + pad2(b.mine) + '</h2><p>One seat per student each way, each day.</p>' +
+  else if (b.mine) html = '<h2>You have seat ' + pad2(b.mine) + '</h2>' + (b.status !== 'ACTIVE' ? '<p class="error">' + esc(b.busNo) +
+    ' is under maintenance and not running. Contact the transport office or book another bus.</p>' : '') + '<p>One seat per student each way, each day.</p>' +
     '<button class="btn" onclick="App.go(\'trips\')">My reservations</button>';
   else if (b.elsewhere) html = '<h2>You already have a seat</h2><p>You are booked on ' + esc(b.elsewhere) + ' at this time. ' +
     'Cancel that seat first if you want this bus.</p><button class="btn" onclick="App.go(\'trips\')">My reservations</button>';
@@ -209,13 +234,14 @@ function summary(error) {
   else html = '<small>Selected</small><div class="big-seat">Seat ' + pad2(n) + '</div><p>' + (lane === 0 || lane === 3 ? 'Window' : 'Aisle') +
     ' seat, ' + (lane < 2 ? 'right' : 'left') + ' side</p>' + stopPicker(b) +
     '<button class="btn primary wide" id="confirm" onclick="confirmSeat()">Confirm seat ' + pad2(n) + '</button>';
-  document.getElementById('summary').innerHTML = (error ? '<p class="error">' + esc(error) + '</p>' : '') + html;
+  var box = document.getElementById('summary');
+  if (box) box.innerHTML = (error ? '<p class="error">' + esc(error) + '</p>' : '') + html;
 }
 
 /* Where the rider gets on (to campus) or off (going back): every stop except the campus. */
 function stopPicker(b) {
   var back = b.direction === 'RETURN', list = b.stops.slice(back ? 1 : 0, back ? b.stops.length : b.stops.length - 1);
-  var chosen = App.stop || onRoute(b, back ? App.q.to : App.q.from);
+  var chosen = App.stop;
   return '<label class="stop-pick">' + (back ? 'Getting off at' : 'Getting on at') + '<select id="my-stop" onchange="App.stop = this.value">' +
     '<option value="">Choose your stop</option>' + list.map(function (s) {
       return '<option value="' + esc(s.name) + '"' + (s.name === chosen ? ' selected' : '') + '>' + esc(s.name) + ' · ' + App.when(s) + '</option>';
@@ -229,13 +255,14 @@ function confirmSeat() {
   var btn = document.getElementById('confirm');
   btn.disabled = true;
   btn.textContent = 'Booking…';
+  var bus = App.bus, seat = App.seat;          // what the student confirmed - not whatever is clicked in the next 30 ms
   setTimeout(function () {                     // let the button repaint before the database call
-    var res = App.call('book', App.bus.id, App.bus.date, App.bus.direction, App.seat, stop);
-    App.stop = '';
-    if (res.ok) return App.go('pass', { id: res.data.id, fresh: true });
-    var keep = { id: App.bus.id, date: App.bus.date, dir: App.bus.direction };
-    App.pages.seats(keep);                     // reload: someone else may have taken seats meanwhile
-    summary(res.error);
+    var res = App.call('book', bus.id, bus.date, bus.direction, seat, stop);
+    if (res.ok) { App.stop = ''; return App.go('pass', { id: res.data.id, fresh: true }); }
+    if (res.db) return;                        // App.call already shows "Database unavailable"
+    App.pages.seats({ id: bus.id, date: bus.date, dir: bus.direction, stop: stop });   // reload, keeping the chosen stop
+    if (document.getElementById('summary')) summary(res.error);
+    else App.render(App.empty('Seat not booked', res.error));              // the seat map itself could not be reloaded
   }, 30);
 }
 
@@ -258,9 +285,65 @@ App.pages.pass = function (p) {
     '<div class="pass-stub"><small>Seat</small><div class="pass-seat">' + pad2(r.seat) + '</div>' + barcode(r.code) +
       '<small>Reference ' + r.code + '</small></div><div class="stamp">' + (cancelled ? 'Cancelled' : 'Confirmed') + '</div></div>' +
     (cancelled ? '' : App.live(r, 760)) +
+    // only for a trip still to come or on the road: the bus's status today says nothing about a finished trip
+    ((r.phase === 'UPCOMING' || r.phase === 'CURRENT') && b.status !== 'ACTIVE' ? '<p class="error">' + esc(b.busNo) +
+      ' is under maintenance and not running on this date. Contact the transport office or book another bus.</p>' : '') +
+    (r.phase === 'UPCOMING' ? notices(r, p.fresh) : '') +
     '<div class="pass-actions"><button class="btn primary" onclick="var m = app.print(); if (m) alert(m);">Print pass</button>' +
-    '<button class="btn" onclick="App.go(\'trips\')">My reservations</button></div>');
+    '<button class="btn" onclick="savePass(' + r.id + ')">Save pass (PDF)</button>' +
+    '<button class="btn" onclick="App.go(\'trips\')">My reservations</button></div><p id="pass-msg" class="muted"></p>');
+  App.passId = r.id;
+  if (r.phase === 'UPCOMING' && (p.fresh || r.emailStatus === 'PENDING')) watchEmail(r.id, 0);   // "sending…" until it settles
 };
+
+/* Re-reads the email status every 2 s (at most 30 s) while this very pass is on screen, until it is no longer being sent. */
+function watchEmail(id, tries) {
+  clearTimeout(App.emailTimer);
+  App.emailTimer = setTimeout(function () {
+    var el = document.querySelector('.notices');
+    if (App.passId !== id || !el) return;                                 // the student moved on: stop quietly
+    var res;
+    try { res = JSON.parse(app.reservation(String(id))); } catch (e) { return; }
+    if (!res.ok || !document.querySelector('.notices')) return;
+    var s = res.data.emailStatus, waiting = (s === '' || s === 'PENDING') && tries < 15;
+    document.querySelector('.notices').outerHTML = notices(res.data, waiting);
+    if (waiting) watchEmail(id, tries + 1);
+  }, 2000);
+}
+
+/* The confirmation email's status - kept apart from the booking, which stands whatever it says.
+   Right after booking ('fresh') the email is still on its way; on a later visit an empty status means it was never sent. */
+function notices(r, fresh) {
+  var s = r.emailStatus || (fresh ? 'PENDING' : '');
+  var words = { SENT: 'sent', PENDING: 'sending…', FAILED: 'not sent', NOT_CONFIGURED: 'not set up', '': 'not sent' };
+  // failed, never sent, or left pending by a closed app: it can be sent again (an email already sent is never re-sent)
+  var again = s === 'FAILED' || s === '' || (s === 'PENDING' && !fresh);
+  return '<p class="muted notices">Confirmation email: ' + words[s] +
+    (again ? ' <button class="btn ghost" id="resend" onclick="resend(' + r.id + ')">Send again</button>' : '') +
+    '<br><small>Your seat is booked either way; you can always print or save this pass.</small></p>';
+}
+
+/* A message under the pass, if the student is still on the pass page. */
+function passMessage(text) {
+  var el = document.getElementById('pass-msg');
+  if (el) el.textContent = text;
+}
+
+function savePass(id) {
+  var res = App.call('savePass', id);
+  if (res.db) return;
+  passMessage(res.ok ? (res.data ? 'Saving ' + res.data + '… a message confirms when it is done.' : '') : res.error);
+}
+
+function resend(id) {
+  var btn = document.getElementById('resend');
+  if (btn) btn.disabled = true;                                          // one click, one email
+  var res = App.call('resend', id);
+  if (res.db) return;
+  if (!res.ok) { passMessage(res.error); if (btn) btn.disabled = false; return; }
+  passMessage('Sending the confirmation again…');
+  watchEmail(id, 0);                                                      // shows the new status once the sender has finished
+}
 
 /* Decorative bars generated from the reservation code (not a scannable code). */
 function barcode(code) {
@@ -277,7 +360,7 @@ function barcode(code) {
 App.tab = 'UPCOMING';
 App.pages.trips = function () {
   var res = App.call('reservations');
-  if (!res.ok) return;
+  if (!res.ok) return App.problem(res);
   var all = App.mine = res.data, tabs = [['UPCOMING', 'Upcoming'], ['CURRENT', 'On the road'], ['COMPLETED', 'Completed'], ['CANCELLED', 'Cancelled']];
   var list = all.filter(function (r) { return r.phase === App.tab; });
   if (App.tab === 'UPCOMING') list.reverse();
@@ -294,7 +377,8 @@ App.pages.trips = function () {
 function tripRow(r) {
   var f = fmtDate(r.date), b = r.bus;
   return '<article class="trip ' + r.phase.toLowerCase() + '" id="trip-' + r.id + '"><div class="cal"><small>' + f.day + '</small><b>' + f.date +
-    '</b><small>' + f.month + '</small></div><div class="info"><span class="busno">' + b.busNo + '</span> <b>' + esc(b.route) + '</b>' + tripTag(b) +
+    '</b><small>' + f.month + '</small></div><div class="info"><span class="busno">' + esc(b.busNo) + '</span> <b>' + esc(b.route) + '</b>' + tripTag(b) +
+    (r.phase === 'UPCOMING' && b.status !== 'ACTIVE' ? ' <span class="tag amber">Not running</span>' : '') +
     '<small>' + (r.stop ? (b.direction === 'RETURN' ? 'off at ' : 'on at ') + esc(r.stop) + (onRoute(b, r.stop) ? '' : ' (no longer on this route)') + ' · ' : '') + b.departure + ' to ' + App.arrives(b) +
     ', seat ' + r.seat + ', ' + r.code + '</small></div>' +
     '<div class="act"><button class="btn" onclick="App.go(\'pass\', {id: ' + r.id + '})">View pass</button>' +
@@ -310,8 +394,12 @@ function askCancel(id) {
 }
 
 function doCancel(id) {
+  var row = document.getElementById('trip-' + id);
+  row.querySelectorAll('button').forEach(function (b) { b.disabled = true; });     // one click, one cancel
   var res = App.call('cancel', id);
-  if (!res.ok) return alert(res.error);
+  if (res.db) return;                                                             // "Database unavailable" is already shown
+  if (!res.ok) { row.querySelector('.act').innerHTML = '<span class="error">' + esc(res.error) + '</span>' +
+    '<button class="btn" onclick="App.pages.trips()">OK</button>'; return; }
   App.tab = 'CANCELLED';
   App.pages.trips();
 }

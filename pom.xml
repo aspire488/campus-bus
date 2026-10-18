@@ -14,6 +14,17 @@
     <javafx.version>21.0.5</javafx.version>
   </properties>
 
+  <dependencyManagement>
+    <dependencies>
+      <!-- mysql-connector-j 8.4.0 brings protobuf-java 3.25.1 (CVE-2024-7254, fixed in 3.25.5) -->
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java</artifactId>
+        <version>3.25.5</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
   <dependencies>
     <!-- JDBC driver: Java <-> MySQL -->
     <dependency>
@@ -31,6 +42,18 @@
       <groupId>org.openjfx</groupId>
       <artifactId>javafx-web</artifactId>
       <version>${javafx.version}</version>
+    </dependency>
+    <!-- booking confirmation email over SMTP (Gmail): Jakarta Mail API + the Angus implementation -->
+    <dependency>
+      <groupId>org.eclipse.angus</groupId>
+      <artifactId>angus-mail</artifactId>
+      <version>2.0.3</version>
+    </dependency>
+    <!-- the travel pass as a PDF (email attachment and "Save pass") -->
+    <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+      <version>3.0.3</version>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
@@ -60,6 +83,12 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.5.2</version>
+        <configuration>
+          <systemPropertyVariables>
+            <!-- tests never send real email, whatever db.properties holds (SmtpMail.configured) -->
+            <campus.bus.mail.off>true</campus.bus.mail.off>
+          </systemPropertyVariables>
+        </configuration>
       </plugin>
       <!-- mvn clean compile exec:java  ->  opens the Swing window at the login screen -->
       <plugin>

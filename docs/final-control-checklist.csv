@@ -12,12 +12,12 @@ S10,Registration,validation,13 cases incl. duplicate admission no./email; bad em
 S11,Registration,double-click Create account,one row,GUI harness,PASS,exactly one row in DB
 S12,Registration,Escape / Cancel,closes without saving,GUI harness (real Escape key),PASS,no row created
 S13,Student rail,Home / Find a bus / My reservations / Profile / Log out,navigate and highlight,GUI harness,PASS,each page opens; logout returns to login
-S14,Home,search strip (From / To / Date / Find a bus),submits to Find a bus with values kept,GUI harness,PASS,From Lisie + Tomorrow -> 2 trips
+S14,Home,search strip (From / To / Date / Find a bus),submits to Find a bus with values kept,GUI harness,SUPERSEDED,replaced by Trip + Your stop (S60-S62)
 S15,Home,empty state Find a bus,opens search,GUI harness,PASS,
 S16,Home,View pass (next bus),opens pass,GUI harness (earlier rounds),PASS,
 S17,Home,Where's my bus,estimated position; rider's stop marked; labelled not GPS,GUI harness + ModelTest,PASS,
-S18,Find a bus,From / To / Date / Leaving after / Bus / Sort,filters and sort,GUI harness + DatabaseTest,PASS,Kaloor 8 trips; after 08:00 -> 7; sort by free seats
-S19,Find a bus,swap (⇄),swaps From and To,GUI harness,PASS,
+S18,Find a bus,From / To / Date / Leaving after / Bus / Sort,filters and sort,GUI harness + DatabaseTest,SUPERSEDED,replaced by Trip + Your stop (S60-S62)
+S19,Find a bus,swap (⇄),swaps From and To,GUI harness,SUPERSEDED,replaced by Trip + Your stop (S60-S62)
 S20,Find a bus,no results + Clear filters,empty state then reset,GUI harness,PASS,resets to today by design
 S21,Find a bus,View seats,opens the trip's seat map,GUI harness,PASS,
 S22,Seat map,back link (All buses / Schedules),returns to the right page,GUI harness,PASS,
@@ -72,3 +72,12 @@ X03,All screens,window 1024x640 and 1320x816,no clipping / overlap / sideways sc
 X04,All screens,MySQL stopped then restarted,clear message; no stack trace; recovers,GUI harness (earlier round),PASS,
 X05,All screens,restart persistence,bookings and cancellations survive restart,GUI harness,PASS,
 X06,Real database,preservation,counts identical before and after this pass,SQL,PASS,31 / 10 / 30 / 28 / scms.transport / SCMS
+S60,Home,search strip (Trip / Your stop / Date / Find a bus),no free From/To; values kept,GUI harness (real clicks),PASS,GuiDrive: home search has Trip + Your stop
+S61,Find a bus,Trip To campus + Your stop,only trips from the stop to campus; campus not offered as a stop,GUI harness + RegressionTest,PASS,To campus + Vyttila: 6 trips; none a return trip
+S62,Find a bus,swap (⇄),switches To campus / From campus; keeps the stop,GUI harness (real click),PASS,From campus + Vyttila: only return trips
+S63,Your pass,confirmation email status,sent / sending... / not sent / not set up; Send again when not sent,GUI harness + NotificationTest,PASS,PENDING shows Send again
+S64,Your pass,Save pass (PDF),PDF identical to the emailed pass,NotificationTest (byte comparison),PASS (logic),system save dialog not driven by the harness
+S65,Login,Create a student account,any email provider; saved as typed (lower case),GUI harness (real clicks),PASS,
+A60,Students,Edit (email),admin corrects the address; id / password / bookings kept,GUI harness + RegressionTest,PASS,
+X60,Start-up,database not changed / update failed dialogs,clear message; app does not open on a broken database,code review + RegressionTest (refusal),UNTESTED (dialog),
+X61,Windows,two app windows,closing the second keeps the database; the first window owns it,sandbox setup + real close-button clicks,PASS,lifecycle run on D: (port 3330)

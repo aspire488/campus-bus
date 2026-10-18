@@ -56,8 +56,9 @@ public class BusDAO {
 
     /** One direction of one bus: "OUT" or "RETURN". */
     public Bus findTrip(int busId, LocalDate date, String direction) throws SQLException {
+        if (!"OUT".equals(direction) && !"RETURN".equals(direction)) throw new IllegalArgumentException("Choose the trip to campus or the trip back.");
         Bus bus = findById(busId, date);
-        if (!"RETURN".equals(direction)) return bus;
+        if ("OUT".equals(direction)) return bus;
         if (bus.returnTrip() == null) throw new IllegalArgumentException(bus.getBusNo() + " does not run a return trip.");
         return bus.returnTrip();
     }
@@ -82,13 +83,35 @@ public class BusDAO {
     }
 
     public void update(Bus b) throws SQLException {
-        if (save("UPDATE buses SET route_id=?, departure=?, arrival=?, return_departure=?, capacity=?, status=? WHERE bus_no=?", b) == 0)
+        try (Connection c = DatabaseConnection.getConnection()) { update(c, b); }
+    }
+
+    /** Same, on {@code c} - inside the transaction that holds the bus row lock (see lock). */
+    public void update(Connection c, Bus b) throws SQLException {
+        if (save(c, "UPDATE buses SET route_id=?, departure=?, arrival=?, return_departure=?, capacity=?, status=? WHERE bus_no=?", b) == 0)
             throw new IllegalArgumentException("That bus no longer exists.");
     }
 
+    /**
+     * Locks one bus row until {@code c}'s transaction ends. Bookings take the same lock, so checks made after it
+     * ("no booked seat above the new capacity", "no booked return trip") stay true until the change is committed.
+     */
+    public static void lock(Connection c, int busId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("SELECT bus_id FROM buses WHERE bus_id = ? FOR UPDATE")) {
+            ps.setInt(1, busId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) throw new IllegalArgumentException("That bus no longer exists.");
+            }
+        }
+    }
+
     private int save(String sql, Bus b) throws SQLException {
+        try (Connection c = DatabaseConnection.getConnection()) { return save(c, sql, b); }
+    }
+
+    private int save(Connection c, String sql, Bus b) throws SQLException {
         if (b.isReturnTrip()) throw new IllegalStateException("Save the bus itself, not its return trip.");
-        try (Connection c = DatabaseConnection.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, b.getRoute().getRouteId());
             ps.setTime(2, Time.valueOf(b.getDeparture()));
             ps.setTime(3, Time.valueOf(b.getArrival()));
@@ -105,29 +128,39 @@ public class BusDAO {
      * campus arrival targets and the evening departure follow the timetable. One-way buses stay one way.
      */
     public void retime(Timetable t) throws SQLException {
-        List<Bus> all = findAll(LocalDate.now());
-        for (Bus b : all)                                        // validate every bus before changing anything
-            t.applyTo(b, b.getRoute(), b.getDeparture(), b.getReturnDeparture() != null, b.getCapacity(), b.getStatus());
-        try (Connection c = DatabaseConnection.getConnection();
-             PreparedStatement ps = c.prepareStatement("UPDATE buses SET arrival=?, return_departure=? WHERE bus_id=?")) {
-            c.setAutoCommit(false);
-            try {
+        DatabaseConnection.transaction(c -> {
+            try (Statement st = c.createStatement()) { st.executeQuery("SELECT bus_id FROM buses FOR UPDATE").close(); }  // no edit slips in between
+            List<Bus> all = findAll(LocalDate.now());                // read after the lock: every bus as it is now
+            for (Bus b : all)                                        // validate every bus before changing anything
+                t.applyTo(b, b.getRoute(), b.getDeparture(), b.getReturnDeparture() != null, b.getCapacity(), b.getStatus());
+            try (PreparedStatement ps = c.prepareStatement("UPDATE buses SET arrival=?, return_departure=? WHERE bus_id=?")) {
                 for (Bus b : all) {
                     ps.setTime(1, Time.valueOf(b.getArrival()));
                     ps.setTime(2, b.getReturnDeparture() == null ? null : Time.valueOf(b.getReturnDeparture()));
                     ps.setInt(3, b.getBusId());
                     ps.executeUpdate();
                 }
-                c.commit();
-            } catch (SQLException e) {
-                c.rollback();
-                throw e;
             }
-        }
+            return null;
+        });
     }
 
+    /**
+     * Deletes a bus that has no booked seats at all - past trips included, so the travel history is never erased
+     * (the foreign key would cascade it away). Cancelled rows go with the bus.
+     */
     public void delete(int busId) throws SQLException {
-        if (Queries.update("DELETE FROM buses WHERE bus_id = ?", busId) == 0) throw new IllegalArgumentException("That bus no longer exists.");
+        DatabaseConnection.transaction(c -> {
+            lock(c, busId);
+            int booked = new ReservationDAO().countBooked(busId);
+            if (booked > 0) throw new IllegalStateException("This bus has " + booked + " booked trips on record (past trips included). "
+                    + "Set it to maintenance instead, so the travel history is kept.");
+            try (PreparedStatement ps = c.prepareStatement("DELETE FROM buses WHERE bus_id = ?")) {
+                ps.setInt(1, busId);
+                ps.executeUpdate();
+            }
+            return null;
+        });
     }
 
     /** Highest seat number booked on this bus for today or later (capacity may not go below it). */
@@ -150,12 +183,40 @@ public class BusDAO {
 
     /** Inserts a new route (id 0) or updates an existing one. */
     public void saveRoute(Route r) throws SQLException {
-        if (r.getRouteId() == 0)
-            Queries.update("INSERT INTO routes (source, destination, stops, distance_km) VALUES (?,?,?,?)",
-                    r.getSource(), r.getDestination(), r.getStops(), r.getDistanceKm() > 0 ? r.getDistanceKm() : null);
-        else
-            Queries.update("UPDATE routes SET source=?, destination=?, stops=?, distance_km=? WHERE route_id=?",
-                    r.getSource(), r.getDestination(), r.getStops(), r.getDistanceKm() > 0 ? r.getDistanceKm() : null, r.getRouteId());
+        try (Connection c = DatabaseConnection.getConnection()) { saveRoute(c, r); }
+    }
+
+    /** Same, on {@code c} (inside the transaction that locked the route's buses). */
+    public void saveRoute(Connection c, Route r) throws SQLException {
+        boolean add = r.getRouteId() == 0;
+        try (PreparedStatement ps = c.prepareStatement(add ? "INSERT INTO routes (source, destination, stops, distance_km) VALUES (?,?,?,?)"
+                : "UPDATE routes SET source=?, destination=?, stops=?, distance_km=? WHERE route_id=?")) {
+            ps.setString(1, r.getSource());
+            ps.setString(2, r.getDestination());
+            ps.setString(3, r.getStops());
+            ps.setObject(4, r.getDistanceKm() > 0 ? r.getDistanceKm() : null);
+            if (!add) ps.setInt(5, r.getRouteId());
+            ps.executeUpdate();
+        }
+    }
+
+    /** Locks one route row until {@code c}'s transaction ends and returns it as saved now. */
+    public static Route lockRouteRow(Connection c, int routeId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("SELECT * FROM routes WHERE route_id = ? FOR UPDATE")) {
+            ps.setInt(1, routeId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) throw new IllegalArgumentException("That route no longer exists.");
+                return new Route(rs.getInt("route_id"), rs.getString("source"), rs.getString("destination"), rs.getString("stops"), rs.getDouble("distance_km"));
+            }
+        }
+    }
+
+    /** Locks every bus on a route until {@code c}'s transaction ends (bookings take the same bus locks). */
+    public static void lockRoute(Connection c, int routeId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("SELECT bus_id FROM buses WHERE route_id = ? FOR UPDATE")) {
+            ps.setInt(1, routeId);
+            ps.executeQuery().close();
+        }
     }
 
     public void deleteRoute(int routeId) throws SQLException {

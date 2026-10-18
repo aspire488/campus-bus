@@ -26,6 +26,9 @@ var App = {
 
   render: function (html) { document.getElementById('view').innerHTML = html; },
 
+  /** A page that could not load: shows why (App.call already shows "Database unavailable" when MySQL is down). */
+  problem: function (res) { if (!res.db) App.render(App.empty('Something went wrong', res.error || 'Please try again.')); },
+
   /** Calls a public method of WebBridge.java and returns its data, or shows the error and returns null. */
   call: function (method) {
     var args = Array.prototype.slice.call(arguments, 1).map(String);

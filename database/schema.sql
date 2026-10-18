@@ -1,5 +1,6 @@
 -- College Bus Reservation System - MySQL schema (tables only; demo rows are in demo-data.sql)
--- Run:  mysql -u root -p < database/schema.sql   (the app also runs this automatically on first launch)
+-- WARNING: this file DROPS every app table. The app runs it by itself only on a database with no tables at all;
+-- never pipe it into an existing database (e.g. college_bus_db) - that erases every student and booking.
 
 CREATE DATABASE IF NOT EXISTS college_bus_db;
 USE college_bus_db;
@@ -68,6 +69,7 @@ CREATE TABLE reservations (
   stop         VARCHAR(40) NULL,                  -- where the student gets on (morning) or off (evening); NULL on older bookings
   status       ENUM('BOOKED','CANCELLED') NOT NULL DEFAULT 'BOOKED',
   booked_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  email_status VARCHAR(16) NULL,                  -- confirmation email: SENT / PENDING / FAILED / NOT_CONFIGURED (NULL = never tried)
   -- 1 while BOOKED, NULL when CANCELLED: NULLs never clash in a UNIQUE key,
   -- so the database itself blocks double-booking but allows re-booking a cancelled seat.
   active       TINYINT GENERATED ALWAYS AS (IF(status = 'BOOKED', 1, NULL)) STORED,

@@ -26,12 +26,7 @@ class DatabaseTest {
     private static String unavailable;     // why MySQL can't be used; each test is then reported as skipped
 
     @BeforeAll static void useTestDatabase() {
-        System.setProperty("db.name", "college_bus_test");
-        try {
-            DatabaseConnection.ensureDatabase();
-        } catch (Exception e) {
-            unavailable = "MySQL not reachable: " + e.getMessage();
-        }
+        unavailable = TestDb.prepare();
     }
 
     @BeforeEach void resetData() throws Exception {

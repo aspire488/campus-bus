@@ -22,7 +22,7 @@ Taken from the running app with synthetic test accounts (no real student data).
 
 | Student | |
 |---|---|
-| ![Home](docs/screenshots/02-student-home.png) Home: next bus and where it is | ![Find a bus](docs/screenshots/03-find-a-bus.png) Find a bus from any stop |
+| ![Home](docs/screenshots/02-student-home.png) Home: next bus and where it is | ![Find a bus](docs/screenshots/03-find-a-bus.png) Find a bus (earlier version: the search now asks for Trip + Your stop) |
 | ![Seat map](docs/screenshots/04-seat-map.png) Seat map and stop picker | ![Bus pass](docs/screenshots/05-campus-pass.png) Bus pass |
 | ![My reservations](docs/screenshots/06-my-reservations.png) My reservations | |
 
@@ -45,6 +45,8 @@ Taken from the running app with synthetic test accounts (no real student data).
 | Direct download | https://github.com/aspire488/campus-bus/releases/download/v1.0/CAMPUS-BUS-1.0-windows-x64.zip |
 | SHA-256 | `2b4e2de18d61edeae7ccc3e42c6e5282aeee029eeefac8dd01fc226c27e2b156` |
 | Built from commit | [`c83de68`](https://github.com/aspire488/campus-bus/commit/c83de68c7284379ee787157dbb1bbe6d477e1e3e) |
+
+> **Note:** this v1.0 zip predates the October 2026 changes (Trip + Your stop search, confirmation email with the PDF pass, the safety fixes). They are in the source on `main`; build them with section 3, or `package-windows.cmd` for a new zip. A new release will get its own version and checksum.
 
 The zip contains the app, its libraries, **a bundled Java 25 runtime** (Eclipse Temurin, made with `jlink`) and three scripts. You do **not** install Java or Maven. MySQL is not inside the zip: `setup-windows.cmd` downloads it once (see below).
 
@@ -145,6 +147,8 @@ The release never touches `college_bus_db`, and the tests never touch it either.
 
 The v1.0 zip was tested on **one** computer, the developer's Windows 11 Home (64-bit) with Smart App Control on, using fresh Windows profiles: download, checksum, setup, second setup (no change), launch from folders with spaces and from other working folders, student and admin sign-in, search, seat booking, seat conflict, cancel and rebook, persistence after restart, database stopped and recovered, reset, clean shutdown, and unpacking with Windows *Extract All*. **Not yet verified:** a second physical computer, Windows 10, and other antivirus / SmartScreen configurations. It is not claimed to work on every Windows PC.
 
+The October 2026 fixes were checked on the same computer only, in sandboxes on drive D: (the real demo install was not touched): a full setup from the release zip under a user folder with an accent and a space (`José Test`), two app windows open at once (the database keeps running when the second window is closed; closing the window opened first stops it), and every booking and admin screen driven with real mouse clicks from the packaged release. **A clean installation on another PC has not been tested.**
+
 ---
 
 ## 2. Accounts
@@ -213,7 +217,9 @@ An institution runs many buses for hundreds of students. Handled by hand, nobody
 - **One timetable for the whole institution:** class start, the campus arrival window and one evening departure (SCMS: classes 08:45, buses reach campus 08:20–08:40, everyone leaves at 16:00). When the schedule prints no campus time, the window's end is shown as the **target** ("by 08:40"). Routes whose last printed pick-up is within 20 minutes of the window are flagged for the transport office to confirm.
 - **One bus, both ways:** a bus drives its route to the institution in the morning and the same route reversed in the evening (or mornings only). Each direction has its own seats.
 - **Every stop has a daily time** (`Stop:minutesFromStart`, or just `Stop` when none is printed). Students see the time the bus reaches *their* stop, and every booking records where the student **gets on** (morning) or **gets off** (evening); the admin passenger list shows it.
-- **One seat per student each way, each day** (all morning buses arrive together, so nobody can ride two). One booking per seat per bus/date/direction.
+- **Every trip has the campus at one end.** *Find a bus* asks for the **Trip** (*To campus* = your stop → campus in the morning, *From campus* = campus → your stop in the evening) and **Your stop**; there is no stop-to-stop search, and the server refuses any other direction or a stop that is not on that trip's route. Stops spelled differently on different buses ("Edapally H.S" / "Edapally H S") are matched as one.
+- **One seat per student each way, each day** (all morning buses arrive together, so nobody can ride two). One booking per seat per bus/date/direction. A booking locks the student and the bus while it is checked and saved, so two clicks, two students, or an admin editing the bus at the same moment cannot slip past these rules.
+- **History is kept:** a bus with booked trips on record (past ones included) cannot be deleted - set it to maintenance; a route edit or a bus move cannot drop a stop that students are booked at.
 - Bookings open 7 days ahead and close when the bus leaves its first stop; cancelling frees the seat immediately.
 
 ## 7. Modules (from the PPT)
@@ -231,10 +237,10 @@ An institution runs many buses for hundreds of students. Handled by hand, nobody
 **Student**
 - Create an account (password typed twice; admission number such as `SCS/10001/26`; class such as `S3 CS2`) and sign in with email or admission number
 - Home: next bus with **Where's my bus** (position on the route line, last/next stop, minutes to arrival — estimated from the timetable and refreshed every 30 s; buses carry no GPS)
-- Find a bus: from / to (⇄ swaps them for the trip home), date (today + 7 days), leaving after, bus number, sort; each result shows the time at *your* stop
+- Find a bus: **Trip** (*To campus* or *From campus*) and **Your stop** (⇄ switches to the trip back), date (today + 7 days), leaving after, bus number, sort; each result shows the time at *your* stop. There is no stop-to-stop search: every trip has the campus at one end
 - Choose **your stop** (getting on / getting off) when booking
 - Seat map drawn as the bus seen from above (driver, door, aisle): available green, booked red, selected, unavailable, yours — with vacant / booked counters
-- Bus pass after booking (seat, bus, your stop and its time, route with every stop, reference), printable through the system print dialog
+- Bus pass after booking (seat, bus, your stop and its time, route with every stop, reference), printable through the system print dialog, saved as a PDF with **Save pass (PDF)**, and emailed on booking when mail is set up
 - My reservations: Upcoming / On the road / Completed / Cancelled with inline cancel confirmation
 - Profile editing
 
@@ -252,6 +258,12 @@ An institution runs many buses for hundreds of students. Handled by hand, nobody
 The pass's bar pattern is **decorative** (generated from the reservation code); it is not a scannable code.
 
 ---
+
+### Booking confirmation email (with the PDF pass)
+
+After a booking is **saved**, the app sends a confirmation email on a background thread: a branded HTML message with a plain-text version, the travel pass attached as a PDF. The PDF pass is a picture of the very pass the app shows on *Your pass* (drawn off-screen from the same data), with the key details as text under it; the same booking always gives the identical PDF, whether emailed or saved with **Save pass (PDF)**. The email is not needed for the booking: if mail is not set up, down or refuses, the booking stays confirmed, the pass page shows *Confirmation email: sent / sending… / not sent / not set up*, offers **Send again** when it was not sent (an email already sent is never sent twice; not for trips that have left), and **Save pass (PDF)** always works offline. Nothing is sent for a booking that was cancelled meanwhile. Settings go in `db.properties` (or `CAMPUS_BUS_MAIL_*` environment variables); see `db.properties.example`. Never put them in the repository. `-Dcampus.bus.mail.off=true` switches email off whatever the settings say; every test run uses it, so tests never send real mail.
+
+**Gmail.** Use a Gmail account with 2-Step Verification on, create an **App Password** (Google Account → Security → 2-Step Verification → App passwords) and set `mail.user=<that Gmail address>` and `mail.password=<the 16-letter app password>`. The app connects to `smtp.gmail.com:587` with STARTTLS (override with `mail.host` / `mail.port` for another provider). A normal Gmail password does not work and must not be used. Personal Gmail accounts are limited to about 500 messages a day. Confirmations go to the address stored for the student, exactly as stored (any provider); an admin can correct a placeholder address in **Admin → Students → Edit** without touching the student's id, password or bookings.
 
 ## 9. Architecture
 
@@ -298,14 +310,19 @@ campus-bus/
     │   ├── Main.java            starts the app (or --setup-demo for the Windows setup)
     │   ├── model/    Displayable, User, Student, Admin, Bus, Route, Timetable, Reservation
     │   ├── dao/      StudentDAO, AdminDAO, BusDAO, ReservationDAO, Queries
-    │   ├── service/  CollegeBusSystem, ReservationService, ScheduleImport, DemoSetup
+    │   ├── service/  CollegeBusSystem, ReservationService, ScheduleImport, DemoSetup,
+    │   │             Notifier, SmtpMail (confirmation email), PassPdf, PassImage (the PDF pass)
     │   ├── gui/      LoginFrame, Dashboard, StudentDashboard, AdminDashboard,
     │   │             WebPanel, WebBridge, TablePanel, FormDialog, Toast, Theme
     │   └── util/     DatabaseConnection, Json
     ├── main/resources/web/      index.html · css/style.css · js/app.js, student.js, admin.js · assets/fonts
     └── test/java/com/collegebus/
         ├── ModelTest.java       validation and rules, no database
-        └── DatabaseTest.java    real JDBC/MySQL tests on college_bus_test
+        ├── DatabaseTest.java    real JDBC/MySQL tests on college_bus_test
+        ├── RegressionTest.java  one test per fixed defect (October 2026 audit and reviews)
+        ├── TestDb.java          prepares college_bus_test for the database test classes
+        ├── gui/WebBridgeTest.java       the page bridge, as the screens call it
+        └── service/NotificationTest.java  confirmation email and PDF pass (fake mail provider)
 ```
 
 ---
@@ -338,7 +355,9 @@ Tables `students`, `admins`, `settings`, `routes`, `buses`, `reservations` (the 
 - Primary keys everywhere; foreign keys `buses.route_id → routes`, `reservations.student_id → students` and `reservations.bus_id → buses` (both `ON DELETE CASCADE`: removing a student frees their seats)
 - `CHECK`: capacity 8–60, arrival after departure, evening trip after arrival, seat number > 0
 - `UNIQUE` on admission number, email, bus number, admin username
-- `settings` holds the institution name and timetable
+- `settings` holds the institution name and timetable; `reservations.email_status` records the confirmation email (SENT / PENDING / FAILED / NOT_CONFIGURED, NULL = never tried), kept apart from the booking itself
+- A bus with booked trips on record (past ones included) cannot be deleted - set it to maintenance instead, so the travel history stays; removing a **student** still removes their bookings (as before)
+- On start-up the app adds what an older database lacks (it never drops anything); it waits at most 60 s for a table another session is using, and needs the `ALTER` privilege (the documented `GRANT ALL` includes it). Row locks are waited for at most 10 s, then the user sees *busy, try again*
 - Passwords stored as salted PBKDF2-HMAC-SHA256 (600,000 iterations, `User.hash()`), never as text; older SHA-256 or cheaper hashes are upgraded at the next sign-in; the database password is never in the source
 - **Double-booking is blocked by MySQL itself:** `reservations.active` is a generated column (`1` while BOOKED, `NULL` when CANCELLED). `UNIQUE (bus_id, travel_date, direction, seat_no, active)` allows one *booked* row per seat, while cancelled rows (NULL) never clash, so a cancelled seat can be booked again. `UNIQUE (student_id, travel_date, direction, active)` stops one student holding two seats in the same direction on the same day.
 - Built for real volume: counts are done with `COUNT(*)` in MySQL and the admin reservation list loads one period at a time.
@@ -377,7 +396,7 @@ Seat map (JS) → app.book(bus, date, direction, seat, stop) → WebBridge.book(
 
 ## 13. Presentation workflow
 
-**Student:** sign in as `student@college.example.com` (password from `demo-accounts.txt`) → Home (next bus, Where's my bus) → *Find a bus* → From *Edappally*, *Tomorrow* (the time shown is when the bus reaches Edappally) → *View seats* → green seat → *Confirm seat* → pass with "Confirmed" stamp → *My reservations* → *Cancel* → the seat is green again. Try ⇄ to search the trip home. Sign in as `ananya@college.example.com` and try the same seat: it is refused.
+**Student:** sign in as `student@college.example.com` (password from `demo-accounts.txt`) → Home (next bus, Where's my bus) → *Find a bus* → Trip *To campus*, Your stop *Edappally*, *Tomorrow* (the time shown is when the bus reaches Edappally; ⇄ shows the trip back) → *View seats* → green seat → *Confirm seat* → pass with "Confirmed" stamp → *My reservations* → *Cancel* → the seat is green again. Try ⇄ to search the trip home. Sign in as `ananya@college.example.com` and try the same seat: it is refused.
 
 **Admin:** sign in as `demo.admin` → Overview → *Buses* → *Add bus* → *Edit* (evening trip: No) → *Schedules* → *Timetable* (change class start: every bus re-times) → *Stop times* → *Seat map* (passenger list) → *Students* → *Remove* (see the confirmation) → *Reservations* (choose a period, filter by department) → *Admins* → *Add admin*.
 
@@ -387,13 +406,16 @@ Seat map (JS) → app.book(bus, date, direction, seat, stop) → WebBridge.book(
 mvn clean test
 ```
 
-`ModelTest` (87 tests, no database) checks validation and rules: registration, bus/route/timetable rules, return trips, the position estimate, JSON escaping, the settings lookup, the root-without-password guard and the demo-setup guard. `DatabaseTest` (37 tests) runs the real JDBC code against a separate database, `college_bus_test`, reset from `schema.sql` before each test: login, setup-only-once, admin accounts, search both ways, booking rules, seat races (concurrent bookings and cancellations), timetable re-timing, student removal, overview numbers, and that the demo setup refuses any database but `campus_bus_demo`. Without a reachable MySQL or without database settings its 37 tests are reported as **skipped**, not failed.
+`ModelTest` (87 tests, no database) checks validation and rules: registration, bus/route/timetable rules, return trips, the position estimate, JSON escaping, the settings lookup, the root-without-password guard and the demo-setup guard. `DatabaseTest` (37 tests) runs the real JDBC code against a separate database, `college_bus_test`, reset from `schema.sql` before each test: login, setup-only-once, admin accounts, search both ways, booking rules, seat races (concurrent bookings and cancellations), timetable re-timing, student removal, overview numbers, and that the demo setup refuses any database but `campus_bus_demo`. Without a reachable MySQL or database settings, every test that needs the database (DatabaseTest, RegressionTest, WebBridgeTest and most of NotificationTest) is reported as **skipped**, not failed; any other start-up error makes them fail.
+
+`RegressionTest` (26 tests) has one test per defect fixed in the October 2026 audit (direction search, stop spellings, direction/stop checks on the server, the database-wipe guard, four booking/admin races, bus-delete history, route edits, error messages, damaged password hashes, email correction) - those 14 each fail on the v1.0 code - plus 5 for problems the independent review found in the first version of the fixes (install folders with accents, a half-finished first run, a route edit racing a booking, spelling-only route edits, a slow database upgrade mistaken for an outage), each shown to fail without its fix, plus 7 from the final multi-agent review (legacy bookings blocking bus edits, a stale route copy, a locked bus reported as an outage, damaged password hashes, names in Indian scripts, duplicate stop spellings, boarding stops hidden from the picker). `WebBridgeTest` (2 tests) calls the page bridge the way the screens do: a booking that is saved is always reported as booked, and a programming error is refused and logged. `NotificationTest` covers the confirmation email and the PDF pass with a fake mail provider - nothing real is ever sent - including that the emailed pass is byte-identical to the saved one, stays on one page with long names, and that names cannot inject markup into the email. All database test classes use only `college_bus_test` (a database whose name does not end in `_test` can never be reset).
 
 | Run | Result |
 |---|---|
+| October 2026 audit fixes after review, MySQL 8.4 (isolated server, port 3320) | 166 tests (87 + 37 + 26 + 2 + 14), 0 failures, 0 skipped |
 | Source with MySQL, commit `c2b9772` (the code in v1.0; later commits changed only the zip packaging script) | 124 tests, 0 failures, 0 skipped (as reported at the time) |
 | Clean anonymous clone of `c83de68` without database settings, during the release | 124 run, 0 failures, 37 skipped |
-| This README update, MySQL stopped | 124 run, 0 failures, 37 skipped (re-run to check the build; the database tests were not exercised) |
+| v1.0 README update (commit 241d9a1), MySQL stopped | 124 run, 0 failures, 37 skipped (re-run to check the build; the database tests were not exercised) |
 
 ## 15. Troubleshooting (source)
 
@@ -404,6 +426,9 @@ mvn clean test
 | *Refusing to log in as MySQL root without a password* | Use a dedicated MySQL user with a password (section 3). |
 | *No database settings* | Create `db.properties` from `db.properties.example` in the project folder. |
 | Setup screen does not appear | An administrator already exists in this database; sign in as admin. |
+| *CAMPUS BUS - database not changed* | The database holds data but has no `reservations` table. Restore it from a backup, or set `db.name` to a new, empty database. |
+| *CAMPUS BUS - database update failed* | Another window or database tool is using the tables (the update waits at most 60 s and removes nothing), or the MySQL user lacks the `ALTER` privilege. Close the other program and start the app again. |
+| *The system is busy right now* | Another booking or an admin edit held the same bus for over 10 s. Nothing was saved; try again. |
 | `mvn` not recognised | Install Maven and add its `bin` folder to PATH, or run `Main` from your IDE. |
 | `cd /d` fails in PowerShell | That is Command Prompt syntax; in PowerShell use `Set-Location D:\campus-bus`. |
 | Window too big | The window sizes itself to your screen; it needs at least 1024 × 640. |
@@ -427,6 +452,13 @@ Fonts: Overpass and Overpass Mono, SIL Open Font License (`src/main/resources/we
 - The Windows release was tested on one Windows 11 computer only (section 1, *Tested so far*); Windows 10, a second physical PC and other antivirus / SmartScreen setups are unverified.
 - The release is not code-signed; SmartScreen may ask for confirmation on the `.cmd` files.
 - First setup needs internet (or the MySQL zip copied in) and about 1 GB of disk.
-- `run-campus-bus.cmd` keeps a console window open while the app runs.
-- Demo passwords are random per computer, but the automated tests use fixed passwords for their fixture data (`database/demo-data.sql`); those are only loaded by the tests or by `-Ddemo=true`.
+- `run-campus-bus.cmd` keeps a console window open while the app runs. The private database belongs to the **first** window you opened: closing that window stops the database, also for any second CAMPUS BUS window still open, so close the first window last. If a console window is closed while its app is still open, the private MySQL keeps running (on 127.0.0.1 only, port 3310, reachable from this computer only) until you log off or restart Windows.
+- Windows user names with letters outside the computer's language code page (for example Malayalam letters on an English Windows): MySQL can only use such a folder through its short (8.3) name. Windows creates those on the system drive by default, where user folders normally are; if they are switched off, `setup-windows.cmd` stops with a "MySQL could not initialise" or "did not start" message, after MySQL has been downloaded and unpacked; no existing data is touched. Accented Latin names (é, ü, ñ ...) work either way.
+- Demo passwords are random per computer, but the automated tests use fixed passwords for their fixture data (`database/demo-data.sql`); those are only loaded by the tests or by `-Ddemo=true`, and only into `campus_bus_demo` or a `*_test` database (other names: ignored with a console message).
 - The app is a desktop program; it is not a web service, and buses have no GPS (positions are estimates).
+- The PDF pass is a picture of the in-app pass, so names in any script show as they do in the app; only the line of selectable text under the picture uses a Latin font and shows other scripts as `?`. Drawing a pass takes about a second, needs a desktop session, and briefly opens a hidden window off-screen.
+- Email delivery is only as good as the provider's answer: "sent" means Gmail accepted the message, not that it reached the inbox (it may land in spam).
+- Keyboard-only use is incomplete: the Student/Admin switch, the left menu and *Log out* need the mouse.
+- *Save pass (PDF)* opens the system save dialog without an owner window, so it can appear behind the app; drawing a pass briefly opens a hidden off-screen window, which may take keyboard focus for a moment.
+- Saving a route re-times its buses in a second step; if that step fails, the route is saved and the buses keep their old times until the next timetable save.
+- Database calls still run on the screen's thread; a slow database makes a window pause (now for at most about 15 seconds instead of indefinitely).
