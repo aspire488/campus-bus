@@ -40,13 +40,13 @@ Taken from the running app with synthetic test accounts (no real student data).
 
 | | |
 |---|---|
-| Release page | https://github.com/aspire488/campus-bus/releases/tag/v1.0 |
-| File | **`CAMPUS-BUS-1.0-windows-x64.zip`** (72 MB) |
-| Direct download | https://github.com/aspire488/campus-bus/releases/download/v1.0/CAMPUS-BUS-1.0-windows-x64.zip |
-| SHA-256 | `2b4e2de18d61edeae7ccc3e42c6e5282aeee029eeefac8dd01fc226c27e2b156` |
-| Built from commit | [`c83de68`](https://github.com/aspire488/campus-bus/commit/c83de68c7284379ee787157dbb1bbe6d477e1e3e) |
+| Release page | https://github.com/aspire488/campus-bus/releases/tag/v1.1 |
+| File | **`CAMPUS-BUS-1.1-windows-x64.zip`** (76 MB) |
+| Direct download | https://github.com/aspire488/campus-bus/releases/download/v1.1/CAMPUS-BUS-1.1-windows-x64.zip |
+| SHA-256 | `f5d88a27d932e88a61587d998820d263fe70acabdc001bc6e2a7ba917e90d558` |
+| Built from | the commit tagged [`v1.1`](https://github.com/aspire488/campus-bus/tree/v1.1) |
 
-> **Note:** this v1.0 zip predates the October 2026 changes (Trip + Your stop search, confirmation email with the PDF pass, the safety fixes). They are in the source on `main`; build them with section 3, or `package-windows.cmd` for a new zip. A new release will get its own version and checksum.
+> **v1.1** contains the October 2026 changes: Trip + Your stop search, the confirmation email with the PDF pass, the safety fixes, and admin messages that no longer hide behind an older one. The previous release stays available at https://github.com/aspire488/campus-bus/releases/tag/v1.0.
 
 The zip contains the app, its libraries, **a bundled Java 25 runtime** (Eclipse Temurin, made with `jlink`) and three scripts. You do **not** install Java or Maven. MySQL is not inside the zip: `setup-windows.cmd` downloads it once (see below).
 
@@ -54,10 +54,10 @@ The zip contains the app, its libraries, **a bundled Java 25 runtime** (Eclipse 
 
 ### Option A: with the mouse
 
-1. Open the **Direct download** link above. The browser saves `CAMPUS-BUS-1.0-windows-x64.zip` to *Downloads*.
+1. Open the **Direct download** link above. The browser saves `CAMPUS-BUS-1.1-windows-x64.zip` to *Downloads*.
 2. Right-click the zip → **Extract All…** → choose a folder (e.g. the Desktop) → **Extract**. Spaces in the folder name are fine.
    Do **not** double-click the scripts while they are still inside the zip; they only work in the extracted folder.
-3. Open the extracted folder `CAMPUS-BUS-1.0-windows-x64` and double-click **`setup-windows.cmd`** (once per computer and Windows user).
+3. Open the extracted folder `CAMPUS-BUS-1.1-windows-x64` and double-click **`setup-windows.cmd`** (once per computer and Windows user).
 4. Double-click **`run-campus-bus.cmd`** to open the app (every time).
 
 ### Option B: with PowerShell commands
@@ -67,14 +67,14 @@ Open **PowerShell** (Start menu → type *PowerShell*) and paste these lines one
 ```powershell
 # 1. download the zip to your Downloads folder
 Set-Location "$env:USERPROFILE\Downloads"
-Invoke-WebRequest -Uri "https://github.com/aspire488/campus-bus/releases/download/v1.0/CAMPUS-BUS-1.0-windows-x64.zip" -OutFile "CAMPUS-BUS-1.0-windows-x64.zip" -UseBasicParsing
+Invoke-WebRequest -Uri "https://github.com/aspire488/campus-bus/releases/download/v1.1/CAMPUS-BUS-1.1-windows-x64.zip" -OutFile "CAMPUS-BUS-1.1-windows-x64.zip" -UseBasicParsing
 
 # 2. check it is the genuine file: must print True
-(Get-FileHash ".\CAMPUS-BUS-1.0-windows-x64.zip" -Algorithm SHA256).Hash -eq "2B4E2DE18D61EDEAE7CCC3E42C6E5282AEEE029EEEFAC8DD01FC226C27E2B156"
+(Get-FileHash ".\CAMPUS-BUS-1.1-windows-x64.zip" -Algorithm SHA256).Hash -eq "F5D88A27D932E88A61587D998820D263FE70ACABDC001BC6E2A7BA917E90D558"
 
 # 3. unzip to the Desktop and go into the folder
-Expand-Archive ".\CAMPUS-BUS-1.0-windows-x64.zip" -DestinationPath "$env:USERPROFILE\Desktop" -Force
-Set-Location "$env:USERPROFILE\Desktop\CAMPUS-BUS-1.0-windows-x64"
+Expand-Archive ".\CAMPUS-BUS-1.1-windows-x64.zip" -DestinationPath "$env:USERPROFILE\Desktop" -Force
+Set-Location "$env:USERPROFILE\Desktop\CAMPUS-BUS-1.1-windows-x64"
 
 # 4. first time only: private MySQL + demo database (takes a few minutes)
 .\setup-windows.cmd
@@ -83,7 +83,7 @@ Set-Location "$env:USERPROFILE\Desktop\CAMPUS-BUS-1.0-windows-x64"
 .\run-campus-bus.cmd
 ```
 
-In PowerShell a script in the current folder must be started with `.\` in front (`.\run-campus-bus.cmd`). In the old **Command Prompt** (`cmd.exe`) use `cd /d "%USERPROFILE%\Desktop\CAMPUS-BUS-1.0-windows-x64"` and then `setup-windows.cmd` / `run-campus-bus.cmd` without `.\`.
+In PowerShell a script in the current folder must be started with `.\` in front (`.\run-campus-bus.cmd`). In the old **Command Prompt** (`cmd.exe`) use `cd /d "%USERPROFILE%\Desktop\CAMPUS-BUS-1.1-windows-x64"` and then `setup-windows.cmd` / `run-campus-bus.cmd` without `.\`.
 
 ### What the three scripts do
 
@@ -149,6 +149,8 @@ The v1.0 zip was tested on **one** computer, the developer's Windows 11 Home (64
 
 The October 2026 fixes were checked on the same computer only, in sandboxes on drive D: (the real demo install was not touched): a full setup from the release zip under a user folder with an accent and a space (`José Test`), two app windows open at once (the database keeps running when the second window is closed; closing the window opened first stops it), and every booking and admin screen driven with real mouse clicks from the packaged release. **A clean installation on another PC has not been tested.**
 
+The v1.1 zip was checked on the same computer in a sandbox on drive D: (own `LOCALAPPDATA`/`APPDATA`, port 3330; the real demo install and port 3310 were not touched): setup, setup again (no change), setup with the settings file missing while demo tables exist (refused, nothing deleted), setup after an interrupted first run (starts over), launch with `run-campus-bus.cmd`, admin sign-in, overview, a refused action followed by a second message (the newer message is shown), and closing the window (the private MySQL stops). Schedule import (Windows file picker), Windows 10 and a second PC were **not** tested.
+
 ---
 
 ## 2. Accounts
@@ -196,7 +198,7 @@ Start the app from the project folder:
 
 On the very first launch on an empty database the app opens **Set up your institution**; after that it opens at the login screen. The admin then sets the timetable and imports the bus schedule (Admin → Routes → *Import schedule*, e.g. `database/scms-schedule-2025-08-18.txt`); students create their own accounts. `mvn clean compile exec:java -Ddemo=true` on a new empty database loads the fictional `database/demo-data.sql` with the fixed passwords the automated tests use; never load it into a real institution's database.
 
-**Build the Windows release yourself:** `package-windows.cmd` (needs a JDK 21+ with `jlink`, e.g. Eclipse Temurin, and Maven). It runs the tests, builds the jar, makes the Java runtime with `jlink` and writes `target\dist\CAMPUS-BUS-1.0-windows-x64.zip`; `-SkipTests` skips the tests. `mvn package` alone builds a library jar plus `target/lib`; it is not a double-click jar.
+**Build the Windows release yourself:** `package-windows.cmd` (needs a JDK 21+ with `jlink`, e.g. Eclipse Temurin, and Maven). It runs the tests, builds the jar, makes the Java runtime with `jlink` and writes `target\dist\CAMPUS-BUS-1.1-windows-x64.zip`; `-SkipTests` skips the tests. `mvn package` alone builds a library jar plus `target/lib`; it is not a double-click jar.
 
 ---
 
@@ -412,6 +414,7 @@ mvn clean test
 
 | Run | Result |
 |---|---|
+| v1.1 release build (`package-windows.ps1`, isolated MySQL 8.4 on port 3320, email switched off) | 166 tests (87 + 37 + 26 + 2 + 14), 0 failures, 0 skipped |
 | October 2026 audit fixes after review, MySQL 8.4 (isolated server, port 3320) | 166 tests (87 + 37 + 26 + 2 + 14), 0 failures, 0 skipped |
 | Source with MySQL, commit `c2b9772` (the code in v1.0; later commits changed only the zip packaging script) | 124 tests, 0 failures, 0 skipped (as reported at the time) |
 | Clean anonymous clone of `c83de68` without database settings, during the release | 124 run, 0 failures, 37 skipped |

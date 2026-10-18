@@ -1,4 +1,4 @@
-# Builds the Windows release: target\dist\CAMPUS-BUS-1.0-windows-x64.zip
+# Builds the Windows release: target\dist\CAMPUS-BUS-1.1-windows-x64.zip
 # The release contains its own Java runtime (made with jlink from a JDK), so users install neither Java nor Maven.
 # No custom .exe is produced: the app starts with the runtime's signed javaw.exe, which Windows Smart App Control
 # accepts, while an unsigned launcher .exe would be blocked on many Windows 11 PCs.
@@ -21,11 +21,11 @@ $mvnArgs = @('-B', 'clean', 'package'); if ($SkipTests) { $mvnArgs += '-DskipTes
 & mvn.cmd @mvnArgs
 if ($LASTEXITCODE -ne 0) { Write-Host 'Maven build failed.'; exit 1 }
 
-$name = 'CAMPUS-BUS-1.0-windows-x64'
+$name = 'CAMPUS-BUS-1.1-windows-x64'
 $dist = "target\dist\$name"
 $app  = "$dist\CAMPUS BUS"
 New-Item -ItemType Directory -Force "$app\app", "$dist\scripts" | Out-Null
-Copy-Item 'target\college-bus-reservation-system-1.0.jar', 'target\lib\*.jar' "$app\app\"
+Copy-Item 'target\college-bus-reservation-system-1.1.jar', 'target\lib\*.jar' "$app\app\"
 
 $modules = 'java.base,java.datatransfer,java.desktop,java.logging,java.management,java.naming,java.net.http,java.prefs,java.scripting,' +
            'java.security.jgss,java.security.sasl,java.sql,java.transaction.xa,java.xml,java.xml.crypto,jdk.accessibility,jdk.crypto.mscapi,' +
