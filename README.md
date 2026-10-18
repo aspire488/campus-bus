@@ -1,19 +1,16 @@
 # CAMPUS BUS — Bus Reservation System for Schools, Colleges and Universities
 
-KTU S3 B.Tech CSE · Object Oriented Programming course project
 **Java · Swing · HTML5 / CSS3 / JavaScript (JavaFX WebView) · JDBC · MySQL 8**
 
 ![Login](docs/screenshots/01-login.png)
 
 A desktop application for any educational institution's bus service. Students find a bus that passes their stop, see the time it reaches that stop, pick a seat on a picture of the bus (green = free, red = booked) and get a bus pass. The transport office sets one timetable for the whole institution, manages buses, routes, students, reservations and administrator accounts, and sees who sits where.
 
-This implementation **expands the initial proposal (PPT)**: every module, class, method and OOP concept from the PPT is kept; the seat map, route lines, two-way buses, timetable, live position estimate, bus pass and admin analytics are additions.
-
 **Two ways to use it:**
 
 | | Who it is for | Needs |
 |---|---|---|
-| **[Windows release (zip)](#1-windows-release-download-the-zip-and-run)** | anyone running the app or giving the demo | Windows 10/11 64-bit and internet once. **No Java, no Maven, no MySQL install** |
+| **[Windows release (zip)](#1-windows-release-download-the-zip-and-run)** | anyone running the app | Windows 10/11 64-bit and internet once. **No Java, no Maven, no MySQL install** |
 | **[From source](#3-build-and-run-from-source)** | developers and evaluators reading the code | JDK 17+, Maven 3.8+, MySQL 8 |
 
 ### Screenshots
@@ -103,13 +100,6 @@ Open `%APPDATA%\CampusBus\demo-accounts.txt` (Notepad opens it after setup; late
 - **Students** (login screen → *Student*): `student@college.example.com`, `ananya@college.example.com`, `rahul@college.example.com` with their passwords, and one shared password for the other 147 demo students
 
 The passwords are created on that computer and exist nowhere else; keep the file private. The demo data is fictional: *Demo College of Engineering*, 5 routes, 13 buses, 150 students and about 800 reservations around the current date (815 when counted after a fresh setup).
-
-### Presentation day: checklist
-
-1. **The day before**, on the laptop you will present with: download, unzip, run `setup-windows.cmd`, then open the app once with `run-campus-bus.cmd` and sign in as admin and as a student. This removes the internet and download risk.
-2. Keep `demo-accounts.txt` open, or write the sign-ins down.
-3. Start the app with `run-campus-bus.cmd` (not anything inside the `CAMPUS BUS` subfolder).
-4. To show a clean demo: `reset-demo.cmd` → type `DELETE` → use the **new** passwords from `demo-accounts.txt`.
 
 ### Troubleshooting (Windows release)
 
@@ -224,7 +214,7 @@ An institution runs many buses for hundreds of students. Handled by hand, nobody
 - **History is kept:** a bus with booked trips on record (past ones included) cannot be deleted - set it to maintenance; a route edit or a bus move cannot drop a stop that students are booked at.
 - Bookings open 7 days ahead and close when the bus leaves its first stop; cancelling frees the seat immediately.
 
-## 7. Modules (from the PPT)
+## 7. Functional modules
 
 | Module | What it does | Where |
 |---|---|---|
@@ -333,7 +323,7 @@ campus-bus/
 
 ---
 
-## 10. OOP concepts — where to point in the viva
+## 10. Object-oriented design
 
 | Concept | Where | What to say |
 |---|---|---|
@@ -341,16 +331,6 @@ campus-bus/
 | **Inheritance** | `User` → `Student`, `User` → `Admin`; `Dashboard` → `StudentDashboard`, `AdminDashboard` | Common fields (id, name, email, password hash) and `checkPassword()` live once in `User`; the menu, page switching and toasts live once in `Dashboard`. |
 | **Polymorphism** | `User.getRole()`, `User.openDashboard()`, `displayDetails()`, `Dashboard.open()`, `Bus.getRoute()` | `LoginFrame.signIn()` gets a `User` and calls `user.openDashboard(system)` — a Student opens the student window, an Admin the console, no `if/else` on type. `Json.of()` turns *any* `Displayable` into JSON through `toMap()`. A bus and its `returnTrip()` answer `getRoute()` / `getDeparture()` differently, so search, seat map and pass work for both directions with one code path. |
 | **Abstraction** | `abstract class User`, `abstract class Dashboard`, `interface Displayable` | They define *what* subclasses must do (`getRole()`, `openDashboard()`, `open(page)`, `toMap()`), not *how*. |
-
-### PPT methods → code
-
-| PPT | Implemented in |
-|---|---|
-| `Student.registerStudent() / updateStudent() / displayStudent()` | `model/Student.java` |
-| `Bus.addBus() / updateBus() / displayBus() / checkAvailability()` | `model/Bus.java` |
-| `Reservation.bookSeat() / cancelBooking() / displayBooking()` | `model/Reservation.java` |
-| `Admin.addBus() / removeBus() / manageSchedule() / viewReservations()` | `model/Admin.java` (`manageSchedule` sets the institution timetable) |
-| `CollegeBusSystem.searchBus() / manageReservations() / displayDetails()` | `service/CollegeBusSystem.java` |
 
 ---
 
@@ -371,42 +351,7 @@ Tables `students`, `admins`, `settings`, `routes`, `buses`, `reservations` (the 
 
 ---
 
-## 12. Viva answers
-
-**How does Java talk to MySQL?**
-`DatabaseConnection.getConnection()` → `DriverManager.getConnection(url, user, password)`. DAOs create a `PreparedStatement` with `?` placeholders, set values, run `executeQuery()` → `ResultSet` or `executeUpdate()`, all in try-with-resources so connections close automatically. Prepared statements also prevent SQL injection.
-
-**How does a seat reservation happen?**
-```
-Seat map (JS) → app.book(bus, date, direction, seat, stop) → WebBridge.book() → ReservationService.bookSeat()
-   1. date not in the past                     4. seat not already taken           (DAO queries)
-   2. trip exists (return trip only if         5. Reservation.bookSeat(): seat ≤ capacity,
-      the bus runs back), not full                bus active, not departed, ≤ 7 days ahead
-   3. no other seat that day in that direction
-→ ReservationDAO.insert() → INSERT … (PreparedStatement) → MySQL UNIQUE keys = final guard
-→ JSON back to JS → bus pass page; Swing toast "Reservation confirmed"
-```
-
-**How are bus times decided?**
-`Timetable` (class start, campus arrival window, evening time). Pick-up times are the bus's own, as printed, and never change. A route that prints its campus time arrives then; otherwise the window's end is the campus **target**. The evening trip leaves at the one evening time, with every stop on the way back estimated. `Admin.manageSchedule(timetable)` applies it to every bus in one transaction (`BusDAO.retime`).
-
-**Where's my bus?** `Bus.estimatePosition()` compares the clock with the timetable and the stop minutes. It is an estimate — there is no GPS on the buses; a real tracker would replace that one method.
-
-**What happens on cancel?** `ReservationService.cancelBooking()` checks the reservation belongs to the student, `Reservation.cancelBooking()` refuses if already cancelled or the bus has left, then `UPDATE … SET status = 'CANCELLED' WHERE … AND status = 'BOOKED'` (two clicks at once cannot both succeed). The seat is free immediately.
-
-**Why HTML/CSS/JS inside Swing?** Visual parts (seat map, route lines, pass, charts) are simpler in HTML/SVG/CSS; data-heavy admin screens (tables + forms) suit Swing. Both use the same Java business logic.
-
-**How does the Windows release run without Java installed?** `package-windows.cmd` uses `jlink` to build a small Java runtime containing only the modules the app needs, and puts it next to the app's jars. `run-campus-bus.cmd` starts the app with that runtime's `javaw.exe`.
-
----
-
-## 13. Presentation workflow
-
-**Student:** sign in as `student@college.example.com` (password from `demo-accounts.txt`) → Home (next bus, Where's my bus) → *Find a bus* → Trip *To campus*, Your stop *Edappally*, *Tomorrow* (the time shown is when the bus reaches Edappally; ⇄ shows the trip back) → *View seats* → green seat → *Confirm seat* → pass with "Confirmed" stamp → *My reservations* → *Cancel* → the seat is green again. Try ⇄ to search the trip home. Sign in as `ananya@college.example.com` and try the same seat: it is refused.
-
-**Admin:** sign in as `demo.admin` → Overview → *Buses* → *Add bus* → *Edit* (evening trip: No) → *Schedules* → *Timetable* (change class start: every bus re-times) → *Stop times* → *Seat map* (passenger list) → *Students* → *Remove* (see the confirmation) → *Reservations* (choose a period, filter by department) → *Admins* → *Add admin*.
-
-## 14. Tests
+## 12. Tests
 
 ```bash
 mvn clean test
@@ -424,7 +369,7 @@ mvn clean test
 | Clean anonymous clone of `c83de68` without database settings, during the release | 124 run, 0 failures, 37 skipped |
 | v1.0 README update (commit 241d9a1), MySQL stopped | 124 run, 0 failures, 37 skipped (re-run to check the build; the database tests were not exercised) |
 
-## 15. Troubleshooting (source)
+## 13. Troubleshooting (source)
 
 | Problem | Fix |
 |---|---|
@@ -442,11 +387,11 @@ mvn clean test
 
 Fonts: Overpass and Overpass Mono, SIL Open Font License (`src/main/resources/web/assets/fonts/OFL.txt`).
 
-## 16. The SCMS schedule
+## 14. The SCMS schedule
 
 `database/scms-schedule-2025-08-18.txt` is a hand transcription of *College Bus Schedule w.e.f 18.08.2025* (SCMS School of Engineering and Technology, Karukutty): 21 buses, 259 boarding points (86 printed without a time). Its header lists every transcription decision and the 5 ambiguous values to confirm with the transport office; driver names and phone numbers are deliberately not included. `docs/scms-import-report.md` compares what the database holds with the file, bus by bus. The Windows demo uses fictional routes instead; an admin can import this file there too (Admin → Routes → *Import schedule*).
 
-## 17. Using it on several computers
+## 15. Using it on several computers
 
 | Question | Answer |
 |---|---|
@@ -454,7 +399,7 @@ Fonts: Overpass and Overpass Mono, SIL Open Font License (`src/main/resources/we
 | Can it run the app? | Yes: on Windows with the release zip (section 1), elsewhere from source with its own MySQL (section 3). Each computer then has its **own, separate data**. |
 | Do two computers share the same buses and bookings? | Only if both `db.properties` point to the **same MySQL server**. That server must be reachable on the network and secured: a dedicated MySQL user per installation with only the needed rights, TLS, and a firewall that admits only the college network or a VPN. Never expose MySQL to the open internet. The Windows release deliberately accepts local connections only. For many users across the internet, a small server API in front of the database is the safer design. |
 
-## 18. Known limitations
+## 16. Known limitations
 
 - The Windows release was tested on one Windows 11 computer only (section 1, *Tested so far*); Windows 10, a second physical PC and other antivirus / SmartScreen setups are unverified.
 - The release is not code-signed; SmartScreen may ask for confirmation on the `.cmd` files.
