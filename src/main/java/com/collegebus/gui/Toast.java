@@ -18,6 +18,8 @@ public class Toast extends JComponent {
     public static void show(JRootPane root, String title, String message, boolean success) {
         Toast t = new Toast(title, message, success);
         JLayeredPane layer = root.getLayeredPane();
+        // a newer toast replaces one still showing: in the same layer it would be drawn behind it and never read
+        for (java.awt.Component old : layer.getComponentsInLayer(JLayeredPane.POPUP_LAYER)) if (old instanceof Toast) layer.remove(old);
         int w = 420, h = 92, x = layer.getWidth() - w - 28, endY = layer.getHeight() - h - 28;
         t.setBounds(x, layer.getHeight(), w, h);
         layer.add(t, JLayeredPane.POPUP_LAYER);
