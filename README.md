@@ -269,27 +269,31 @@ After a booking is **saved**, the app sends a confirmation email on a background
 
 ## 9. Architecture
 
-```
-                    JAVA DESKTOP APP  (Main → first-run setup → LoginFrame)
-                              │
-          ┌───────────────────┴────────────────────┐
-     JAVA SWING                              HTML / CSS / JS  (JavaFX WebView)
-     LoginFrame, setup + forms (FormDialog), Home, Find a bus, Seat map,
-     Dashboard route-line menu,              Bus pass, My reservations,
-     Admin tables (TablePanel), Profile,     Admin overview + seat map / passengers
-     Toasts, JOptionPane                           │  window.app = WebBridge
-          │                     WebPanel = JFXPanel + WebView (inside Swing)
-          └───────────────────┬────────────────────┘
-       CollegeBusSystem · ReservationService · ScheduleImport · Admin   ← business rules (Java)
-                              │
-              StudentDAO · AdminDAO · BusDAO · ReservationDAO    ← SQL (PreparedStatement only)
-                              │
-                 JDBC (Connection, PreparedStatement, ResultSet)
-                              │
-      MySQL: college_bus_db (source / institution) · campus_bus_demo (Windows release)
-```
+The diagram below maps the main runtime path from application startup and role-based sign-in through the Java/web UI bridge, transport operations, reservation domain, and MySQL persistence. **Click the diagram to open the interactive version**; its nodes link to relevant source files and folders.
 
-**How HTML/CSS/JS is integrated:** `WebPanel` is a Swing component (`JFXPanel`) hosting a WebView. It loads `resources/web/index.html` and gives JavaScript a Java object (`WebBridge`) as `window.app`. JavaScript calls e.g. `app.book("3", "2026-10-09", "OUT", "12", "Kaloor")`; Java checks the rules, talks to MySQL and returns JSON (`{"ok":true,"data":…}`). JavaScript only draws (SVG route lines, seat grid, pass). The Swing menu tells the web view which page to show; the web page tells Swing which menu item to highlight. Bridge calls check the signed-in role, so a student window cannot run admin calls and never receives other students' names.
+<p align="center">
+  <a href="https://gitdiagram.com/aspire488/campus-bus?utm_source=readme&utm_medium=picture">
+    <img src="https://gitdiagram.com/aspire488/campus-bus/diagram.png" alt="Campus Bus architecture: application entry, student and transport-admin flows, desktop and web UI, transport operations, reservation domain, persistence, and MySQL" width="100%"/>
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://gitdiagram.com/aspire488/campus-bus?utm_source=readme&utm_medium=badge">
+    <img src="https://gitdiagram.com/diagram-badge.svg" alt="Explore the interactive architecture diagram"/>
+  </a>
+</p>
+
+### Runtime layers
+
+1. **Application entry** — `Main.java` starts the application, prepares database connectivity, and opens `LoginFrame.java`.
+2. **Desktop and web UI** — Swing hosts the JavaFX WebView; HTML/CSS/JavaScript renders the main screens and calls Java through `WebBridge.java`.
+3. **Transport operations** — `CollegeBusSystem` coordinates system operations; admin functions, timetable import, PDF pass generation, and booking notifications sit in the operations layer.
+4. **Reservation domain** — `ReservationService` applies booking rules and coordinates trip/reservation operations using the user, route, bus, and reservation models.
+5. **Persistence and outputs** — DAO classes execute SQL through JDBC against MySQL; `Json.java` serializes bridge responses, and the mail service sends booking confirmations when configured.
+
+**How the UI bridge works:** `WebPanel` is a Swing component (`JFXPanel`) hosting a WebView. It loads `resources/web/index.html` and exposes a Java object as `window.app`. JavaScript requests an operation; Java validates the signed-in role, applies business rules, accesses MySQL, and returns JSON. JavaScript renders route lines, the seat grid, and the pass. The Swing menu and web page keep navigation state in sync.
+
+**Access boundary:** bridge calls check the signed-in role. Student sessions cannot invoke admin operations or receive other students' names.
 
 ### Project structure
 
